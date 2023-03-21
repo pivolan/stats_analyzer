@@ -52,14 +52,15 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 	}
 
 	// Unpack archive if necessary
-	handleFile(filePath)
+	tableName := handleFile(filePath)
+	analyzeStatistics(bot, message, tableName)
 }
-func handleFile(filePath string) {
+func handleFile(filePath string) string {
 	// Unpack archive if necessary
 	unpackedFilePath, err := unpackArchive(filePath)
 	if err != nil {
 		log.Printf("Error unpacking file: %v", err)
-		return
+		return ""
 	}
 	if unpackedFilePath != "" {
 		filePath = unpackedFilePath
@@ -69,9 +70,10 @@ func handleFile(filePath string) {
 	tableName, err := importDataIntoClickHouse(filePath)
 	if err != nil {
 		log.Printf("Error importing data into ClickHouse: %v", err)
-		return
+		return ""
 	}
 	fmt.Print(tableName)
+	return tableName
 }
 func analyzeStatistics(bot *tgbotapi.BotAPI, message *tgbotapi.Message, tableName string) {
 	// TODO: Implement analyzing statistics and sending result to user
