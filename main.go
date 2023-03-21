@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
-	uuid2 "github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"html/template"
 	"io"
 	"log"
@@ -13,6 +16,12 @@ import (
 )
 
 func main() {
+	dsn := "default:@tcp(127.0.0.1:9004)/default"
+	_, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		log.Fatalln("cannot connect to clickhouse", err)
+	}
+
 	bot, err := tgbotapi.NewBotAPI("6232707025:AAECU6gOFwNwug-I7tjrWPq9ML6kOFBiru8")
 	if err != nil {
 		log.Fatal(err)
@@ -20,11 +29,11 @@ func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Get the uuid from the URL
-		uuid, _ := uuid2.NewV4()
+		uuidv := uuid.NewV4()
 
 		// Generate the upload form page with the uuid field pre-filled
 		tmpl := template.Must(template.ParseFiles("upload.html"))
-		err := tmpl.Execute(w, uuid.String())
+		err := tmpl.Execute(w, uuidv.String())
 		if err != nil {
 			http.Error(w, "Error rendering upload form", http.StatusInternalServerError)
 			return
