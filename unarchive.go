@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"compress/gzip"
+	"fmt"
 	"github.com/pierrec/lz4"
 	"io"
 	"os"
@@ -48,18 +49,22 @@ func unpackZipArchive(filePath string) (string, error) {
 
 	// Extract largest file to same directory
 	destPath := filepath.Join(filepath.Dir(filePath), largestFile.Name)
+	os.MkdirAll(filepath.Dir(destPath), 0755)
 	outFile, err := os.Create(destPath)
 	if err != nil {
+		fmt.Println("create1", destPath)
 		return "", err
 	}
 	defer outFile.Close()
 	rc, err := largestFile.Open()
 	if err != nil {
+		fmt.Println("open1")
 		return "", err
 	}
 	defer rc.Close()
 	_, err = io.Copy(outFile, rc)
 	if err != nil {
+		fmt.Println("copy1")
 		return "", err
 	}
 

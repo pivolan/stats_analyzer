@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"io"
 	"log"
@@ -51,6 +52,10 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 	}
 
 	// Unpack archive if necessary
+	handleFile(filePath)
+}
+func handleFile(filePath string) {
+	// Unpack archive if necessary
 	unpackedFilePath, err := unpackArchive(filePath)
 	if err != nil {
 		log.Printf("Error unpacking file: %v", err)
@@ -66,11 +71,8 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		log.Printf("Error importing data into ClickHouse: %v", err)
 		return
 	}
-
-	// Analyze data and send result to user
-	go analyzeStatistics(bot, message, tableName)
+	fmt.Print(tableName)
 }
-
 func analyzeStatistics(bot *tgbotapi.BotAPI, message *tgbotapi.Message, tableName string) {
 	// TODO: Implement analyzing statistics and sending result to user
 }
