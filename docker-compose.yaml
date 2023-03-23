@@ -1,0 +1,8 @@
+version: '3.8'
+
+services:
+  clickhouse:
+    image: yandex/clickhouse-server
+    ports:
+      - "9004:9004"
+      - "8123:8123"

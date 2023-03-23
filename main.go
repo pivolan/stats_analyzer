@@ -91,6 +91,7 @@ func main() {
 	u.Timeout = 60
 
 	go func() {
+		fmt.Println("listen on: http://localhost:8005")
 		err := http.ListenAndServe(":8005", nil)
 		if err != nil {
 			fmt.Println("Error starting server:", err)

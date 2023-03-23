@@ -147,13 +147,13 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	sql += strings.Join(fields, ",\n") + fmt.Sprintf(") ENGINE = ReplacingMergeTree PRIMARY KEY (id) SETTINGS index_granularity = 8192")
 	tx := db.Exec("DROP TABLE IF EXISTS " + tableName)
 	fmt.Println(sql)
-	if err != nil {
+	if tx.Error != nil {
 		log.Println("create table error", err)
-		return "", err
+		return "", tx.Error
 	}
 	tx = db.Exec(sql)
-	if err != nil {
-		return "", err
+	if tx.Error != nil {
+		return "", tx.Error
 	}
 	b := bytes.NewBufferString("")
 	csvWriter := csv.NewWriter(b)
@@ -197,4 +197,39 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	}
 	fmt.Println("all saved, lines saved:", i)
 	return tableName, nil
+}
+
+type ColumnInfo struct {
+	Name string
+	Type string
+}
+
+func getColumnAndTypeList(db *gorm.DB, tableName string) ([]ColumnInfo, error) {
+	query := fmt.Sprintf("DESCRIBE TABLE %s", tableName)
+	tx := db.Raw(query)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	var columns []ColumnInfo
+	tx.Scan(&columns)
+
+	return columns, nil
+}
+func generateQueries(tableName string, columns []ColumnInfo) []string {
+	var queries []string
+
+	for _, col := range columns {
+		if strings.HasPrefix(col.Type, "Int") || strings.HasPrefix(col.Type, "Float") {
+			queries = append(queries, fmt.Sprintf("SELECT AVG(%[1]s), MAX(%[1]s), MIN(%[1]s), SUM(%[1]s) FROM %s", col.Name, tableName))
+		} else if strings.HasPrefix(col.Type, "Date") || strings.HasPrefix(col.Type, "DateTime") {
+			queries = append(queries, fmt.Sprintf("SELECT toStartOfDay(%[1]s) AS day, COUNT(*) FROM %s GROUP BY day ORDER BY day", col.Name, tableName))
+			queries = append(queries, fmt.Sprintf("SELECT toStartOfMonth(%[1]s) AS month, COUNT(*) FROM %s GROUP BY month ORDER BY month", col.Name, tableName))
+			queries = append(queries, fmt.Sprintf("SELECT toStartOfYear(%[1]s) AS year, COUNT(*) FROM %s GROUP BY year ORDER BY year", col.Name, tableName))
+		} else {
+			queries = append(queries, fmt.Sprintf("SELECT %[1]s, COUNT(*) AS cnt FROM %s GROUP BY %[1]s HAVING cnt < 100 ORDER BY cnt DESC LIMIT 10", col.Name, tableName))
+		}
+	}
+
+	return queries
 }

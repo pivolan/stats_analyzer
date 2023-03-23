@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"io"
 	"log"
 	"net/http"
@@ -52,8 +55,7 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 	}
 
 	// Unpack archive if necessary
-	tableName := handleFile(filePath)
-	analyzeStatistics(bot, message, tableName)
+	handleFile(filePath)
 }
 func handleFile(filePath string) string {
 	// Unpack archive if necessary
@@ -73,8 +75,26 @@ func handleFile(filePath string) string {
 		return ""
 	}
 	fmt.Print(tableName)
+	analyzeStatistics(tableName)
 	return tableName
 }
-func analyzeStatistics(bot *tgbotapi.BotAPI, message *tgbotapi.Message, tableName string) {
-	// TODO: Implement analyzing statistics and sending result to user
+func analyzeStatistics(tableName string) {
+	dsn := "default:@tcp(127.0.0.1:9004)/default"
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		log.Fatalln("cannot connect to clickhouse", err)
+	}
+
+	columnsInfo, err := getColumnAndTypeList(db, tableName)
+	fmt.Println(columnsInfo, err)
+	queries := generateQueries(tableName, columnsInfo)
+	fmt.Println(queries)
+	for i, query := range queries {
+		result := map[string]interface{}{}
+		db.Raw(query).Scan(&result)
+		fmt.Println(i, "query:", query)
+		for key, value := range result {
+			fmt.Println(key, value)
+		}
+	}
 }
