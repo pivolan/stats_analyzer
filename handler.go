@@ -91,7 +91,7 @@ func analyzeStatistics(tableName string) {
 	fmt.Println(queries)
 	for i, query := range queries {
 		result := map[string]interface{}{}
-		db.Raw(query).Scan(&result)
+		db.Raw(query.Sql).Scan(&result)
 		fmt.Println(i, "query:", query)
 		for key, value := range result {
 			fmt.Println(key, value)
