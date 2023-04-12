@@ -2,16 +2,12 @@ package main
 
 import (
 	"fmt"
-	"reflect"
+	"strings"
 	"testing"
 )
 
 func TestBarcode(t1 *testing.T) {
-	t := reflect.TypeOf(CommonStat{})
-
-	// Loop over the fields in the struct and print their names
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		fmt.Println(field.Name)
-	}
+	a := strings.TrimRight(fmt.Sprintf("%.6f", 1.0000), "0")
+	a = strings.TrimRight(a, ".")
+	fmt.Println(a)
 }

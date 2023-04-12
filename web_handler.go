@@ -63,7 +63,6 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 			msg2 := tgbotapi.NewDocumentUpload(chatId, data)
 			msg2.Caption = "file"
 			bot.Send(msg2)
-			delete(users, uuid)
 		}
 	}()
 

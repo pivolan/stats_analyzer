@@ -27,10 +27,29 @@ func GenerateTable(stats map[string]CommonStat) string {
 
 	// Loop over each key in the map and add a row to the table
 	for k, v := range stats {
+		values := make([]interface{}, len(fields))
+		values[0] = k
+
+		// Loop over the fields in the CommonStat struct and add their values to the row
+		for i, h := range fields[1:] {
+			if f, ok := reflect.TypeOf(v).FieldByName(h.(string)); ok {
+				if f.Type.Kind() == reflect.Int64 {
+					values[i+1] = reflect.ValueOf(v).FieldByName(h.(string)).Int()
+				} else if f.Type.Kind() == reflect.Float64 {
+					val := reflect.ValueOf(v).FieldByName(h.(string)).Float()
+					a := strconv.FormatFloat(val, 'f', 3, 64)
+					a = strings.TrimRight(a, "0")
+					a = strings.TrimRight(a, ".")
+
+					values[i+1] = a
+				} else {
+					values[i+1] = ""
+				}
+			}
+		}
+
 		// Add a new row to the table with the key and values from the CommonStat struct
-		t.AppendRows([]table.Row{
-			{k, v.Uniq, v.Avg, v.Min, v.Max, v.Median, v.Quantile001, v.Quantile099},
-		})
+		t.AppendRows([]table.Row{values})
 	}
 
 	// Set the output format of the table to Markdown
