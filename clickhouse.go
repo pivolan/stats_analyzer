@@ -117,7 +117,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	}
 	fmt.Println(headers)
 	fmt.Println(types)
-	dsn := "default:@tcp(127.0.0.1:9004)/default"
+	dsn := "default:default@tcp(127.0.0.1:9004)/default"
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)

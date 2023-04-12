@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -17,7 +18,7 @@ var users = map[string]int64{}
 var bot *tgbotapi.BotAPI
 
 func main() {
-	dsn := "default:@tcp(127.0.0.1:9004)/default"
+	dsn := "default:default@tcp(127.0.0.1:9004)/default"
 	_, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
@@ -68,6 +69,7 @@ func main() {
 					delete(users, uid)
 				}
 			}
+			removeOldFiles("upload", time.Now().Add(-time.Hour*2))
 		}
 	}()
 	for update := range updates {
@@ -81,4 +83,41 @@ func main() {
 			go handleText(bot, update)
 		}
 	}
+}
+
+func removeOldFiles(dirPath string, maxAge time.Time) error {
+	// Get a list of files and directories in the directory
+	files, err := os.ReadDir(dirPath)
+	if err != nil {
+		return err
+	}
+
+	// Loop through each file/directory
+	for _, file := range files {
+		filePath := filepath.Join(dirPath, file.Name())
+
+		// If the file is a directory, recursively call this function on it
+		if file.IsDir() {
+			err := removeOldFiles(filePath, maxAge)
+			if err != nil {
+				return err
+			}
+		} else {
+			// If the file is older than the max age, remove it
+			fileStat, err := os.Stat(filePath)
+			if err != nil {
+				return err
+			}
+			fileModTime := fileStat.ModTime()
+			if fileModTime.Before(maxAge) {
+				err := os.Remove(filePath)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("Removed file: %s\n", filePath)
+			}
+		}
+	}
+
+	return nil
 }

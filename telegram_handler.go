@@ -23,7 +23,7 @@ func handleText(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	uid := uuid.NewV4()
 	message := update.Message
 	users[uid.String()] = message.Chat.ID
-	msg := tgbotapi.NewMessage(message.Chat.ID, "upload by this link: http://127.0.0.1:8005/?id="+uid.String())
+	msg := tgbotapi.NewMessage(message.Chat.ID, "upload by this link: https://statsdata.org/?id="+uid.String())
 	toDelete[uid.String()] = time.Now()
 	bot.Send(msg)
 	msg = tgbotapi.NewMessage(update.Message.Chat.ID, helpText)
@@ -37,7 +37,7 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		log.Printf("Error getting file URL: %v", err)
 		uid := uuid.NewV4()
 		users[uid.String()] = message.Chat.ID
-		msg := tgbotapi.NewMessage(message.Chat.ID, "Error on upload file, if file too big try another method, upload by this link: http://127.0.0.1:8005/?id="+uid.String())
+		msg := tgbotapi.NewMessage(message.Chat.ID, "Error on upload file, if file too big try another method, upload by this link: https://statsdata.org/?id="+uid.String())
 		bot.Send(msg)
 		return
 	}
@@ -103,7 +103,7 @@ func handleFile(filePath string) map[string]CommonStat {
 	return analyzeStatistics(tableName)
 }
 func analyzeStatistics(tableName string) map[string]CommonStat {
-	dsn := "default:@tcp(127.0.0.1:9004)/default"
+	dsn := "default:default@tcp(127.0.0.1:9004)/default"
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
