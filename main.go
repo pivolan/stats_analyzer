@@ -3,17 +3,18 @@ package main
 import (
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
-	uuid "github.com/satori/go.uuid"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
+	"time"
 )
+
+var users = map[string]int64{}
+var bot *tgbotapi.BotAPI
 
 func main() {
 	dsn := "default:@tcp(127.0.0.1:9004)/default"
@@ -22,18 +23,18 @@ func main() {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}
 
-	bot, err := tgbotapi.NewBotAPI("6232707025:AAECU6gOFwNwug-I7tjrWPq9ML6kOFBiru8")
+	bot, err = tgbotapi.NewBotAPI("6232707025:AAECU6gOFwNwug-I7tjrWPq9ML6kOFBiru8")
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Get the uuid from the URL
-		uuidv := uuid.NewV4()
+		id := r.URL.Query().Get("id")
 
 		// Generate the upload form page with the uuid field pre-filled
 		tmpl := template.Must(template.ParseFiles("upload.html"))
-		err := tmpl.Execute(w, uuidv.String())
+		err := tmpl.Execute(w, id)
 		if err != nil {
 			http.Error(w, "Error rendering upload form", http.StatusInternalServerError)
 			return
@@ -41,47 +42,7 @@ func main() {
 	})
 
 	// Handle a POST request to /upload with a file upload form
-	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Get the file from the form data
-		file, header, err := r.FormFile("file")
-		if err != nil {
-			http.Error(w, "Error uploading file", http.StatusBadRequest)
-			return
-		}
-		defer file.Close()
-
-		// Get the uuid from the form data
-		uuid := r.FormValue("uuid")
-		if uuid == "" {
-			http.Error(w, "Error getting uuid", http.StatusBadRequest)
-			return
-		}
-
-		// Save the uploaded file to a local folder with the uuid as the filename
-		os.MkdirAll(filepath.Join("uploads", uuid), 0755)
-		filePath := filepath.Join("uploads", uuid, header.Filename)
-		dst, err := os.Create(filePath)
-		if err != nil {
-			http.Error(w, "Error create saving file"+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer dst.Close()
-
-		_, err = io.Copy(dst, file)
-		if err != nil {
-			http.Error(w, "Error saving file", http.StatusInternalServerError)
-			return
-		}
-
-		handleFile(filePath)
-
-		fmt.Fprintf(w, "File uploaded successfully")
-	})
+	http.HandleFunc("/upload", handleUpload)
 
 	bot.Debug = true
 
@@ -99,7 +60,16 @@ func main() {
 		}
 	}()
 	updates, err := bot.GetUpdatesChan(u)
-
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			for uid, date := range toDelete {
+				if time.Now().After(date.Add(time.Hour * 1)) {
+					delete(users, uid)
+				}
+			}
+		}
+	}()
 	for update := range updates {
 		if update.Message == nil {
 			continue
