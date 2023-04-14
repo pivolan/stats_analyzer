@@ -297,7 +297,7 @@ func (c *CommonStat) Set(key string, value interface{}) error {
 		case float64:
 			fmt.Println("value is a float64")
 			result = int64(v)
-		case int:
+		case int64:
 			fmt.Println("value is an int")
 			result = int64(v)
 		case string:
@@ -319,7 +319,7 @@ func (c *CommonStat) Set(key string, value interface{}) error {
 		case float64:
 			fmt.Println("x is a float64")
 			result = v
-		case int:
+		case int64:
 			fmt.Println("x is an int")
 			result = float64(v)
 		case string:
