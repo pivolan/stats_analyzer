@@ -9,7 +9,7 @@ import (
 )
 
 func TestGetColumnAndTypeList(t *testing.T) {
-	db, err := gorm.Open(mysql.Open("default:default@tcp(127.0.0.1:9004)/default"))
+	db, err := gorm.Open(mysql.Open("default:@tcp(127.0.0.1:9004)/default"))
 	assert.NoError(t, err)
 	tableName := "id_time_project_fa6af7"
 	columns, err := getColumnAndTypeList(db, tableName)
@@ -35,4 +35,7 @@ func TestGetColumnAndTypeList(t *testing.T) {
 	fmt.Println("results 1", r1)
 	fmt.Println("results 2", r2)
 	fmt.Println("merged", r)
+	for key, value := range r {
+		fmt.Println(key, value)
+	}
 }

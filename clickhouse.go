@@ -292,17 +292,48 @@ func (c *CommonStat) Set(key string, value interface{}) error {
 	// Check if value is of correct type
 	switch fieldValue.Kind() {
 	case reflect.Int64:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("value %v is not of type int64", value)
+		var result int64
+		switch v := value.(type) {
+		case float64:
+			fmt.Println("value is a float64")
+			result = int64(v)
+		case int:
+			fmt.Println("value is an int")
+			result = int64(v)
+		case string:
+			fmt.Println("value is a string")
+			// Convert value to int64
+			if val, err := strconv.ParseInt(v, 10, 64); err == nil {
+				result = val
+			} else {
+				fmt.Println("Unable to convert string to int64")
+			}
+		default:
+			fmt.Println("value is not a number or string")
 		}
-		fieldValue.SetInt(v)
+		fieldValue.SetInt(result)
 	case reflect.Float64:
-		v, ok := value.(float64)
-		if !ok {
-			return fmt.Errorf("value %v is not of type float64", value)
+		var result float64
+
+		switch v := value.(type) {
+		case float64:
+			fmt.Println("x is a float64")
+			result = v
+		case int:
+			fmt.Println("x is an int")
+			result = float64(v)
+		case string:
+			fmt.Println("x is a string")
+			// Convert x to float64
+			if val, err := strconv.ParseFloat(v, 64); err == nil {
+				result = val
+			} else {
+				fmt.Println("Unable to convert string to float64")
+			}
+		default:
+			fmt.Println("x is not a number or string")
 		}
-		fieldValue.SetFloat(v)
+		fieldValue.SetFloat(result)
 	default:
 		return fmt.Errorf("field %s is not of type int64 or float64", fieldName)
 	}
