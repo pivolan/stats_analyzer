@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	uuid "github.com/satori/go.uuid"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"io"
 	"log"
 	"net/http"
@@ -101,30 +98,4 @@ func handleFile(filePath string) map[string]CommonStat {
 	}
 	fmt.Print(tableName)
 	return analyzeStatistics(tableName)
-}
-func analyzeStatistics(tableName string) map[string]CommonStat {
-	dsn := "default:default@tcp(127.0.0.1:9004)/default"
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		log.Fatalln("cannot connect to clickhouse", err)
-	}
-
-	columnsInfo, err := getColumnAndTypeList(db, tableName)
-	fmt.Println(columnsInfo, err)
-	sql1 := generateSqlForNumericColumnsStats(columnsInfo, tableName)
-	fmt.Println(sql1)
-	sql2 := generateSqlForUniqCounts(columnsInfo, tableName)
-	fmt.Println(sql2)
-	numericInfo := map[string]interface{}{}
-	tx := db.Raw(sql1)
-	tx.Scan(numericInfo)
-	fmt.Println(numericInfo)
-	uniqInfo := map[string]interface{}{}
-	tx2 := db.Raw(sql2)
-	tx2.Scan(uniqInfo)
-	fmt.Println(uniqInfo)
-	r1 := parseUniqResults(uniqInfo)
-	r2 := parseNumericResults(numericInfo)
-	r := mergeStat(r1, r2)
-	return r
 }

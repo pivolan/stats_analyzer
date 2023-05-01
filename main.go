@@ -17,9 +17,10 @@ import (
 var users = map[string]int64{}
 var bot *tgbotapi.BotAPI
 
+const DSN = "default:@tcp(127.0.0.1:9004)/default"
+
 func main() {
-	dsn := "default:default@tcp(127.0.0.1:9004)/default"
-	_, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	_, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}

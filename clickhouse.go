@@ -117,8 +117,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	}
 	fmt.Println(headers)
 	fmt.Println(types)
-	dsn := "default:default@tcp(127.0.0.1:9004)/default"
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}
@@ -209,7 +208,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 
 type ColumnInfo struct {
 	Name string
-	Type string
+	Type string //Date DateTime64 Int64 Float64
 }
 
 func getColumnAndTypeList(db *gorm.DB, tableName string) ([]ColumnInfo, error) {
@@ -317,13 +316,10 @@ func (c *CommonStat) Set(key string, value interface{}) error {
 
 		switch v := value.(type) {
 		case float64:
-			fmt.Println("x is a float64")
 			result = v
 		case int64:
-			fmt.Println("x is an int")
 			result = float64(v)
 		case string:
-			fmt.Println("x is a string")
 			// Convert x to float64
 			if val, err := strconv.ParseFloat(v, 64); err == nil {
 				result = val
@@ -440,6 +436,11 @@ func generateSqlForUniqCounts(columns []ColumnInfo, table string) (sql string) {
 
 func generateSqlForNumericColumnsStats(columns []ColumnInfo, table string) (sql string) {
 	statMethods := []string{"quantile(0.01)", "quantile(0.99)", "median", "avg", "max", "min"}
+	fields := columnAggregatesSelectSqlGenerator(columns, statMethods)
+	return "SELECT " + strings.Join(fields, ",") + " FROM " + table
+}
+func columnAggregatesSelectSqlGenerator(columns []ColumnInfo, aggregatesMethods []string) []string {
+	statMethods := aggregatesMethods
 	fields := []string{}
 	for _, column := range columns {
 		if excludeColumn(column.Name) {
@@ -452,5 +453,5 @@ func generateSqlForNumericColumnsStats(columns []ColumnInfo, table string) (sql 
 			}
 		}
 	}
-	return "SELECT " + strings.Join(fields, ",") + " FROM " + table
+	return fields
 }
