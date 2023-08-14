@@ -17,7 +17,7 @@ import (
 var users = map[string]int64{}
 var bot *tgbotapi.BotAPI
 
-const DSN = "default:@tcp(127.0.0.1:9004)/default"
+const DSN = "default:@tcp(127.0.0.1:9000)/default"
 
 func main() {
 	_, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})

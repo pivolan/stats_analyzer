@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -25,6 +24,7 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 	numericInfo := map[string]interface{}{}
 	tx := db.Raw(sql1)
 	tx.Scan(numericInfo)
+	fmt.Println(numericInfo)
 	uniqInfo := map[string]interface{}{}
 	tx2 := db.Raw(sql2)
 	tx2.Scan(uniqInfo)
@@ -42,9 +42,8 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 		if t.Error != nil {
 			fmt.Println(t.Error)
 		}
-		bytes, _ := json.MarshalIndent(dateAggregatesInfo, "", "\t")
-
-		fmt.Sprintln(string(bytes))
+		datesInfo := CommonStat{Dates: dateAggregatesInfo}
+		r["dates_info"] = datesInfo
 	}
 	//groups
 	sqls4 := generateSqlForGroups(columnsInfo, r1, tableName)
@@ -57,8 +56,8 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 		if t.Error != nil {
 			fmt.Println(t.Error)
 		}
-		bytes, _ := json.MarshalIndent(dateAggregatesInfo, "", "\t")
-		fmt.Println(string(bytes))
+		groupsInfo := CommonStat{Groups: dateAggregatesInfo}
+		r["groups_info"] = groupsInfo
 	}
 	return r
 }

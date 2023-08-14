@@ -71,11 +71,12 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		msg := tgbotapi.NewMessage(message.Chat.ID, "<pre>\n"+formattedText+"\n</pre>")
 		msg.ParseMode = tgbotapi.ModeHTML
 		bot.Send(msg)
+		//files with common infos
 		data := tgbotapi.FileBytes{Name: "stats" + time.Now().Format("20060102-150405") + ".txt", Bytes: []byte(formattedText)}
 		msg2 := tgbotapi.NewDocumentUpload(message.Chat.ID, data)
 		msg2.Caption = "file"
 		bot.Send(msg2)
-
+		//files with dates
 	}()
 }
 

@@ -14,10 +14,8 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
 )
 
@@ -27,6 +25,14 @@ func getMD5String(input string) string {
 	hashBytes := hasher.Sum(nil)
 	hashString := hex.EncodeToString(hashBytes)
 	return hashString
+}
+func SearchStrings(a []string, x string) int {
+	for i, s := range a {
+		if s == x {
+			return i
+		}
+	}
+	return -1
 }
 func replaceSpecialSymbols(input string) string {
 	// Replace all non-alphanumeric characters with underscores
@@ -51,7 +57,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	//header
 	headers, err := r.Read()
 	//headers := []string{"id", "time", "project", "user", "type", "article", "audiofile", "articletype", "progress"}
-	typesPriority := []string{"", "String", "Float64", "Int64", "Date"}
+	typesWeight := []string{"", "Date", "Int64", "Float64", "String"}
 	values, err := r.Read()
 	types := make([]string, len(values))
 	nullables := make([]string, len(values))
@@ -104,7 +110,9 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 				}
 				t = "String"
 			}
-			if sort.SearchStrings(typesPriority, t) > sort.SearchStrings(typesPriority, types[n]) {
+			currentTypeWeight := SearchStrings(typesWeight, t)
+			savedTypeWeight := SearchStrings(typesWeight, types[n])
+			if currentTypeWeight > savedTypeWeight {
 				types[n] = t
 			}
 		}
@@ -199,7 +207,6 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	if b.Len() > 0 {
 		csvWriter.Flush()
 		sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
-		fmt.Println(b.String())
 		db.Exec(sql)
 	}
 	fmt.Println("all saved, lines saved:", i)
@@ -234,25 +241,6 @@ type QueryResult struct {
 	SingleOrMany StatsQueryResultType
 }
 
-func generateQueries(tableName string, columns []ColumnInfo) []QueryResult {
-	var queries []QueryResult
-
-	for _, col := range columns {
-		if strings.HasPrefix(col.Type, "Int") || strings.HasPrefix(col.Type, "Float") {
-			query := QueryResult{
-				Sql:          fmt.Sprintf("SELECT, median(%[1]s) AVG(%[1]s), MAX(%[1]s), MIN(%[1]s), SUM(%[1]s) FROM %s", col.Name, tableName),
-				SingleOrMany: RESULT_SINGLE,
-			}
-			queries = append(queries, query)
-
-		} else if strings.HasPrefix(col.Type, "Date") || strings.HasPrefix(col.Type, "DateTime") {
-		} else {
-		}
-	}
-
-	return queries
-}
-
 func IsNumericType(_type string) bool {
 	return go_utils.InArray(_type, []string{"Int64", "Float64", "Nullable(Int64)", "Nullable(Float64)"})
 }
@@ -272,8 +260,10 @@ func RemoveSpecialChars(s string) string {
 }
 
 type CommonStat struct {
-	Uniq                                            int64
-	Avg, Min, Max, Median, Quantile001, Quantile099 float64
+	Uniq                                                                    int64
+	Avg, Min, Max, Median, Quantile001, Quantile01, Quantile099, Quantile09 float64
+	Dates                                                                   []map[string]interface{}
+	Groups                                                                  []map[string]interface{}
 }
 
 func (c *CommonStat) Set(key string, value interface{}) error {
@@ -376,12 +366,6 @@ func mergeStat(results ...map[string]CommonStat) (response map[string]CommonStat
 		}
 	}
 	return
-}
-func TestZero(t *testing.T) {
-	a := CommonStat{Avg: -2.23}
-	b := CommonStat{Avg: 5, Min: 7.5, Uniq: 58}
-	setZeroFields(&a, b)
-	fmt.Println(a, b)
 }
 func setZeroFields(a *CommonStat, b CommonStat) {
 	// Get type and value of struct a using reflection
