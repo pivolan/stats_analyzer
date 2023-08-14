@@ -75,6 +75,7 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	formattedText := GenerateTable(stat)
 	formattedTexts := GenerateGroupsTables(stat)
+	csvFiles := GenerateCSVByDates(stat)
 
 	msg := tgbotapi.NewMessage(chatId, "<pre>\n"+formattedText+"\n</pre>")
 	msg.ParseMode = tgbotapi.ModeHTML
@@ -88,6 +89,12 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	msg2 = tgbotapi.NewDocumentUpload(chatId, data)
 	msg2.Caption = "file"
 	bot.Send(msg2)
+	for _, csvData := range csvFiles {
+		data = tgbotapi.FileBytes{Name: "stats_dates" + time.Now().Format("20060102-150405") + ".csv", Bytes: []byte(csvData)}
+		msg2 = tgbotapi.NewDocumentUpload(chatId, data)
+		msg2.Caption = "file"
+		bot.Send(msg2)
+	}
 }
 
 func handleFile(filePath string) map[string]CommonStat {

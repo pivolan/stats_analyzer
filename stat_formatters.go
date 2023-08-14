@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
 	"reflect"
 	"sort"
@@ -99,6 +101,52 @@ func GenerateGroupsTables(stats map[string]CommonStat) []string {
 		t.SetStyle(table.StyleDefault)
 
 		result = append(result, t.Render())
+	}
+
+	// Set the output format of the table to Markdown
+	// Render the table and return it as a string
+	return result
+}
+func GenerateCSVByDates(stats map[string]CommonStat) []string {
+	result := []string{}
+
+	// Loop over each key in the map and add a row to the table
+	for _, v := range stats {
+		var buffer bytes.Buffer
+		t := csv.NewWriter(&buffer)
+
+		// Loop over the fields in the struct and print their names
+		fields := []string{}
+		if len(v.Dates) == 0 {
+			continue
+		}
+		mapRevert := map[string]int{}
+		i := 0
+		header := []string{}
+
+		for columnName, _ := range v.Dates[0] {
+			header = append(header, columnName)
+		}
+		sort.Strings(header)
+		for _, columnName := range header {
+			fields = append(fields, columnName)
+			mapRevert[columnName] = i
+			i++
+		}
+
+		t.Write(fields)
+
+		for _, data := range v.Dates {
+			values := make([]string, len(data))
+			for column, value := range data {
+				values[mapRevert[column]] = fmt.Sprint(value)
+			}
+			t.Write(values)
+		}
+
+		// Add a new row to the table with the key and values from the CommonStat struct
+		t.Flush()
+		result = append(result, buffer.String())
 	}
 
 	// Set the output format of the table to Markdown
