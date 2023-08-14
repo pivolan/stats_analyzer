@@ -57,7 +57,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	//header
 	headers, err := r.Read()
 	//headers := []string{"id", "time", "project", "user", "type", "article", "audiofile", "articletype", "progress"}
-	typesWeight := []string{"", "Date", "Int64", "Float64", "String"}
+	typesWeight := []string{"", "DateTime64", "Date", "Int64", "Float64", "String"}
 	values, err := r.Read()
 	types := make([]string, len(values))
 	nullables := make([]string, len(values))
@@ -70,20 +70,26 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 		for n, value := range values {
 			f := ""
 			var v interface{}
-			v, err = time.Parse("2006-01-02 15:04:05", value)
+			v, err = time.Parse("2006-01-02 15:04:05.999999", value)
 			if err == nil {
 				f = "DateTime"
 			}
 			if err != nil {
-				v, err = time.Parse("2006-01-02", value)
+				v, err = time.Parse("2006-01-02 15:04:05", value)
+				if err == nil {
+					f = "DateTime"
+				}
 				if err != nil {
-					v, err = strconv.ParseUint(value, 10, 64)
+					v, err = time.Parse("2006-01-02", value)
 					if err != nil {
-						v, err = strconv.ParseInt(value, 10, 64)
+						v, err = strconv.ParseUint(value, 10, 64)
 						if err != nil {
-							v, err = strconv.ParseFloat(value, 64)
+							v, err = strconv.ParseInt(value, 10, 64)
 							if err != nil {
-								v = value
+								v, err = strconv.ParseFloat(value, 64)
+								if err != nil {
+									v = value
+								}
 							}
 						}
 					}

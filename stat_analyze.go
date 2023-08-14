@@ -33,7 +33,7 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 	r := mergeStat(r1, r2)
 	//generate by date fields
 	sqls3 := generateSqlForGroupByDates(columnsInfo, tableName)
-	for _, sql3 := range sqls3 {
+	for i, sql3 := range sqls3 {
 		fmt.Println(sql3)
 		dateAggregatesInfo := []map[string]interface{}{}
 
@@ -43,11 +43,11 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 			fmt.Println(t.Error)
 		}
 		datesInfo := CommonStat{Dates: dateAggregatesInfo}
-		r["dates_info"] = datesInfo
+		r[fmt.Sprintf("dates_info_%d", i)] = datesInfo
 	}
 	//groups
 	sqls4 := generateSqlForGroups(columnsInfo, r1, tableName)
-	for _, sql := range sqls4 {
+	for i, sql := range sqls4 {
 		fmt.Println(sql)
 		dateAggregatesInfo := []map[string]interface{}{}
 
@@ -57,7 +57,7 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 			fmt.Println(t.Error)
 		}
 		groupsInfo := CommonStat{Groups: dateAggregatesInfo}
-		r["groups_info"] = groupsInfo
+		r[fmt.Sprintf("groups_info_%d", i)] = groupsInfo
 	}
 	return r
 }
