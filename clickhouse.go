@@ -194,7 +194,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 			values = append([]string{strconv.Itoa(i)}, values...)
 		}
 		csvWriter.Write(values)
-		if i%10000 == 0 {
+		if i%5000 == 0 {
 			//save
 			csvWriter.Flush()
 			sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
