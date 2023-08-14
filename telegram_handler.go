@@ -89,11 +89,19 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	msg2 = tgbotapi.NewDocumentUpload(chatId, data)
 	msg2.Caption = "file"
 	bot.Send(msg2)
-	for _, csvData := range csvFiles {
-		data = tgbotapi.FileBytes{Name: "stats_dates" + time.Now().Format("20060102-150405") + ".csv", Bytes: []byte(csvData)}
+	if len(csvFiles) > 2 {
+		b := ZipArchive(csvFiles)
+		data = tgbotapi.FileBytes{Name: "stats_dates" + time.Now().Format("20060102-150405") + ".zip", Bytes: b}
 		msg2 = tgbotapi.NewDocumentUpload(chatId, data)
 		msg2.Caption = "file"
 		bot.Send(msg2)
+	} else {
+		for _, csvData := range csvFiles {
+			data = tgbotapi.FileBytes{Name: "stats_dates" + time.Now().Format("20060102-150405") + ".csv", Bytes: []byte(csvData)}
+			msg2 = tgbotapi.NewDocumentUpload(chatId, data)
+			msg2.Caption = "file"
+			bot.Send(msg2)
+		}
 	}
 }
 

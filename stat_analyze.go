@@ -106,7 +106,7 @@ func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table string) []string
 			fields := columnAggregatesSelectSqlGenerator(columnsInfo, []string{"min", "max", "median", "avg"})
 
 			for _, truncDate := range truncateDatesList {
-				sql := "SELECT toString(date_trunc('" + truncDate + "', " + columnInfo.Name + ")) as datetime, count(*) as cnt, " + strings.Join(fields, ",") +
+				sql := "SELECT toString(date_trunc('" + truncDate + "', " + columnInfo.Name + ")) as datetime, count(*) as cnt, 'info' as common, " + strings.Join(fields, ",") +
 					" FROM " + table + " GROUP BY datetime ORDER BY 1 DESC"
 				sqls = append(sqls, sql)
 			}

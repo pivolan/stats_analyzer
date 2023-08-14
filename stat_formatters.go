@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/csv"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 import (
@@ -152,4 +154,31 @@ func GenerateCSVByDates(stats map[string]CommonStat) []string {
 	// Set the output format of the table to Markdown
 	// Render the table and return it as a string
 	return result
+}
+func ZipArchive(csvs []string) []byte {
+	var buffer bytes.Buffer
+
+	// Step 2: Create a new ZIP writer using the buffer
+	zipWriter := zip.NewWriter(&buffer)
+
+	// Step 3: For each string/file pair
+	for i, content := range csvs {
+		// Create a new entry using the header
+		writer, err := zipWriter.Create(fmt.Sprintf("stats_dates_%d"+time.Now().Format("20060102-150405")+".csv", i))
+		if err != nil {
+			return nil
+		}
+
+		// Write the string content to this entry
+		_, err = writer.Write([]byte(content))
+		if err != nil {
+			return nil
+		}
+	}
+
+	// Step 4: Close the ZIP writer
+	zipWriter.Close()
+
+	// Print the ZIP content for demonstration (usually you'd save this to a file or send it somewhere)
+	return buffer.Bytes()
 }
