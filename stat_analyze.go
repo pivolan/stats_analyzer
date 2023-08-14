@@ -21,6 +21,8 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 	fmt.Println(sql1)
 	sql2 := generateSqlForUniqCounts(columnsInfo, tableName)
 	fmt.Println(sql2)
+	sql3 := generateSqlForCount(columnsInfo, tableName)
+	fmt.Println(sql3)
 	numericInfo := map[string]interface{}{}
 	tx := db.Raw(sql1)
 	tx.Scan(numericInfo)
@@ -28,9 +30,13 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 	uniqInfo := map[string]interface{}{}
 	tx2 := db.Raw(sql2)
 	tx2.Scan(uniqInfo)
+	countInfo := map[string]interface{}{}
+	tx3 := db.Raw(sql3)
+	tx3.Scan(countInfo)
 	r1 := parseUniqResults(uniqInfo)
 	r2 := parseNumericResults(numericInfo)
-	r := mergeStat(r1, r2)
+	r3 := parseCountResults(countInfo)
+	r := mergeStat(r1, r2, r3)
 	//generate by date fields
 	sqls3 := generateSqlForGroupByDates(columnsInfo, tableName)
 	for i, sql3 := range sqls3 {

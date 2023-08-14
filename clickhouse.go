@@ -266,6 +266,7 @@ func RemoveSpecialChars(s string) string {
 }
 
 type CommonStat struct {
+	Count                                                                   int64
 	Uniq                                                                    int64
 	Avg, Min, Max, Median, Quantile001, Quantile01, Quantile099, Quantile09 float64
 	Dates                                                                   []map[string]interface{}
@@ -337,6 +338,13 @@ func parseUniqResults(uniqResults map[string]interface{}) (result map[string]Com
 	result = map[string]CommonStat{}
 	for field, value := range uniqResults {
 		result[field] = CommonStat{Uniq: value.(int64)}
+	}
+	return
+}
+func parseCountResults(countResults map[string]interface{}) (result map[string]CommonStat) {
+	result = map[string]CommonStat{}
+	for _, value := range countResults {
+		result["all"] = CommonStat{Count: value.(int64)}
 	}
 	return
 }
@@ -422,6 +430,9 @@ func generateSqlForUniqCounts(columns []ColumnInfo, table string) (sql string) {
 		fields = append(fields, fmt.Sprintf("%s(%s) as %s", method, column.Name, column.Name))
 	}
 	return "SELECT " + strings.Join(fields, ",") + " FROM " + table
+}
+func generateSqlForCount(columns []ColumnInfo, table string) (sql string) {
+	return "SELECT count() FROM " + table
 }
 
 func generateSqlForNumericColumnsStats(columns []ColumnInfo, table string) (sql string) {
