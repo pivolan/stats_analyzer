@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {
@@ -53,16 +52,8 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		stat := handleFile(filePath)
-		formattedText := GenerateTable(stat)
-		fmt.Println(formattedText)
 		if chatId, ok := users[uuid]; ok {
-			msg := tgbotapi.NewMessage(chatId, formattedText)
-			bot.Send(msg)
-
-			data := tgbotapi.FileBytes{Name: "stats" + time.Now().Format("20060102-150405") + ".txt", Bytes: []byte(formattedText)}
-			msg2 := tgbotapi.NewDocumentUpload(chatId, data)
-			msg2.Caption = "file"
-			bot.Send(msg2)
+			sendStats(chatId, stat, bot)
 		}
 	}()
 

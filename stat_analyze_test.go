@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"strings"
 	"testing"
 	"time"
 )
@@ -39,4 +40,20 @@ func TestTimeParser(t *testing.T) {
 	}
 
 	fmt.Println("Parsed time:", tt)
+}
+func TestGenerateGroupsTables(t *testing.T) {
+	info := map[string]CommonStat{
+		"vasya": {Groups: []map[string]interface{}{
+			{"id": 10, "datetime": time.Now(), "count(*)": 123},
+			{"id": 11, "datetime": time.Now().Add(time.Minute), "count(*)": 12},
+			{"id": 12, "datetime": time.Now().Add(time.Minute * 2), "count(*)": 22},
+		}},
+		"kolya": {Groups: []map[string]interface{}{
+			{"id": 10, "datetime": time.Now(), "count(*)": 123},
+			{"id": 11, "datetime": time.Now().Add(time.Minute), "count(*)": 12},
+			{"id": 12, "datetime": time.Now().Add(time.Minute * 2), "count(*)": 22},
+		}},
+	}
+	result := GenerateGroupsTables(info)
+	fmt.Println(strings.Join(result, "\n"))
 }

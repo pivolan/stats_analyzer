@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -66,18 +67,27 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 	// Unpack archive if necessary
 	go func() {
 		stat := handleFile(filePath)
-		formattedText := GenerateTable(stat)
-		fmt.Println(formattedText)
-		msg := tgbotapi.NewMessage(message.Chat.ID, "<pre>\n"+formattedText+"\n</pre>")
-		msg.ParseMode = tgbotapi.ModeHTML
-		bot.Send(msg)
-		//files with common infos
-		data := tgbotapi.FileBytes{Name: "stats" + time.Now().Format("20060102-150405") + ".txt", Bytes: []byte(formattedText)}
-		msg2 := tgbotapi.NewDocumentUpload(message.Chat.ID, data)
-		msg2.Caption = "file"
-		bot.Send(msg2)
+		sendStats(message.Chat.ID, stat, bot)
 		//files with dates
 	}()
+}
+
+func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
+	formattedText := GenerateTable(stat)
+	formattedTexts := GenerateGroupsTables(stat)
+
+	msg := tgbotapi.NewMessage(chatId, "<pre>\n"+formattedText+"\n</pre>")
+	msg.ParseMode = tgbotapi.ModeHTML
+	bot.Send(msg)
+	//files with common infos
+	data := tgbotapi.FileBytes{Name: "stats" + time.Now().Format("20060102-150405") + ".txt", Bytes: []byte(formattedText)}
+	msg2 := tgbotapi.NewDocumentUpload(chatId, data)
+	msg2.Caption = "file"
+	bot.Send(msg2)
+	data = tgbotapi.FileBytes{Name: "stats_groups" + time.Now().Format("20060102-150405") + ".txt", Bytes: []byte(strings.Join(formattedTexts, "\n"))}
+	msg2 = tgbotapi.NewDocumentUpload(chatId, data)
+	msg2.Caption = "file"
+	bot.Send(msg2)
 }
 
 func handleFile(filePath string) map[string]CommonStat {
