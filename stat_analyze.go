@@ -39,7 +39,7 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 	r := mergeStat(r1, r2, r3)
 	//generate by date fields
 	sqls3 := generateSqlForGroupByDates(columnsInfo, tableName)
-	for i, sql3 := range sqls3 {
+	for name, sql3 := range sqls3 {
 		fmt.Println(sql3)
 		dateAggregatesInfo := []map[string]interface{}{}
 
@@ -49,7 +49,7 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 			fmt.Println(t.Error)
 		}
 		datesInfo := CommonStat{Dates: dateAggregatesInfo}
-		r[fmt.Sprintf("dates_info_%d", i)] = datesInfo
+		r[fmt.Sprintf("dates_%s", name)] = datesInfo
 	}
 	//groups
 	sqls4 := generateSqlForGroups(columnsInfo, r1, tableName)
@@ -95,8 +95,8 @@ func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonS
 }
 
 // method will find all date fields and generate sql for group by them
-func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table string) []string {
-	sqls := []string{}
+func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table string) map[string]string {
+	sqls := map[string]string{}
 	for _, columnInfo := range columnsInfo {
 		truncateDatesList := []string{"year", "month", "day"}
 		if strings.HasPrefix(columnInfo.Type, "DateTime") {
@@ -108,7 +108,7 @@ func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table string) []string
 			for _, truncDate := range truncateDatesList {
 				sql := "SELECT toString(date_trunc('" + truncDate + "', " + columnInfo.Name + ")) as datetime, count(*) as cnt, 'info' as common, " + strings.Join(fields, ",") +
 					" FROM " + table + " GROUP BY datetime ORDER BY 1 DESC"
-				sqls = append(sqls, sql)
+				sqls[fmt.Sprintf("%s_%s", columnInfo.Name, truncDate)] = sql
 			}
 		}
 	}

@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 import (
@@ -109,11 +108,11 @@ func GenerateGroupsTables(stats map[string]CommonStat) []string {
 	// Render the table and return it as a string
 	return result
 }
-func GenerateCSVByDates(stats map[string]CommonStat) []string {
-	result := []string{}
+func GenerateCSVByDates(stats map[string]CommonStat) map[string]string {
+	result := map[string]string{}
 
 	// Loop over each key in the map and add a row to the table
-	for _, v := range stats {
+	for name, v := range stats {
 		var buffer bytes.Buffer
 		t := csv.NewWriter(&buffer)
 
@@ -148,14 +147,14 @@ func GenerateCSVByDates(stats map[string]CommonStat) []string {
 
 		// Add a new row to the table with the key and values from the CommonStat struct
 		t.Flush()
-		result = append(result, buffer.String())
+		result[name] = buffer.String()
 	}
 
 	// Set the output format of the table to Markdown
 	// Render the table and return it as a string
 	return result
 }
-func ZipArchive(csvs []string) []byte {
+func ZipArchive(csvs map[string]string) []byte {
 	var buffer bytes.Buffer
 
 	// Step 2: Create a new ZIP writer using the buffer
@@ -164,7 +163,7 @@ func ZipArchive(csvs []string) []byte {
 	// Step 3: For each string/file pair
 	for i, content := range csvs {
 		// Create a new entry using the header
-		writer, err := zipWriter.Create(fmt.Sprintf("stats_dates_%d"+time.Now().Format("20060102-150405")+".csv", i))
+		writer, err := zipWriter.Create(fmt.Sprintf("%s.csv", i))
 		if err != nil {
 			return nil
 		}
