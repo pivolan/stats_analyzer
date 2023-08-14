@@ -93,7 +93,7 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 		b := ZipArchive(csvFiles)
 		data = tgbotapi.FileBytes{Name: "stats_dates" + time.Now().Format("20060102-150405") + ".zip", Bytes: b}
 		msg2 = tgbotapi.NewDocumentUpload(chatId, data)
-		msg2.Caption = "file"
+		msg2.Caption = "use https://www.csvplot.com/ for great presentation of this data, use datetime column for date axis, common column for legend, and cnt as main count"
 		bot.Send(msg2)
 	} else {
 		for _, csvData := range csvFiles {
