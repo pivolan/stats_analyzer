@@ -69,7 +69,7 @@ func GenerateGroupsTables(stats map[string]CommonStat) []string {
 		// Loop over the fields in the struct and print their names
 		fields := table.Row{}
 		if len(v.Groups) == 0 {
-			return nil
+			continue
 		}
 		mapRevert := map[string]int{}
 		i := 0
