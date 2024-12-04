@@ -17,14 +17,43 @@ import (
 var toDelete = map[string]time.Time{}
 
 func handleText(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	helpText := `This bot is for statistics analyzer. You can upload a CSV file here in any format, and we will analyze this data and show you summaries. The file can be any data size, and it can be gzip, lz4, or zip archived.`
+	welcomeText := `Привет! 👋
+
+Я помогу проанализировать ваши данные и создать статистические отчёты. 
+
+Что я умею:
+- Анализирую CSV файлы любого размера
+- Поддерживаю архивы (gzip, lz4, zip)
+- Создаю подробную статистику по всем колонкам
+- Генерирую графики распределения данных
+- Строю временные ряды и агрегации
+
+Как со мной работать:
+1. Отправьте CSV файл прямо в чат
+2. Или напишите любое сообщение, чтобы получить персональную ссылку для веб-загрузки файла
+
+После обработки вы получите:
+- Текстовый отчет с основной статистикой
+- Файл с детальным анализом групп данных
+- CSV файлы с временными рядами (если есть даты)
+
+Для начала просто отправьте мне файл с данными!
+
+`
+	//helpText := `This bot is for statistics analyzer. You can upload a CSV file here in any format, and we will analyze this data and show you summaries. The file can be any data size, and it can be gzip, lz4, or zip archived.`
 	uid := uuid.NewV4()
 	message := update.Message
 	users[uid.String()] = message.Chat.ID
-	msg := tgbotapi.NewMessage(message.Chat.ID, "upload by this link: https://statsdata.org/?id="+uid.String())
+	msg := tgbotapi.NewMessage(message.Chat.ID, welcomeText)
+	if update.Message.Text == "/start" {
+		_, err := bot.Send(msg)
+		if err != nil {
+			return
+		}
+	}
+
+	msg = tgbotapi.NewMessage(message.Chat.ID, "Перейдите по ссылке чтобы загрузить файл: https://statsdata.org/?id="+uid.String())
 	toDelete[uid.String()] = time.Now()
-	bot.Send(msg)
-	msg = tgbotapi.NewMessage(update.Message.Chat.ID, helpText)
 	bot.Send(msg)
 }
 

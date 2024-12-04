@@ -65,7 +65,9 @@ func main() {
 		}
 		fmt.Println("start listen http 8005")
 	}()
+
 	updates, err := bot.GetUpdatesChan(u)
+
 	go func() {
 		for {
 			time.Sleep(time.Minute)
