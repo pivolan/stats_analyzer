@@ -44,17 +44,26 @@ func handleText(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	uid := uuid.NewV4()
 	message := update.Message
 	users[uid.String()] = message.Chat.ID
-	msg := tgbotapi.NewMessage(message.Chat.ID, welcomeText)
-	if update.Message.Text == "/start" {
-		_, err := bot.Send(msg)
-		if err != nil {
+
+	if message.IsCommand() {
+		switch message.Command() {
+		case "start":
+			msg := tgbotapi.NewMessage(message.Chat.ID, welcomeText)
+			_, err := bot.Send(msg)
+			if err != nil {
+				return
+			}
+
+			time.Sleep(time.Second * 5)
+			msg = tgbotapi.NewMessage(message.Chat.ID, "Перейдите по ссылке чтобы загрузить файл: https://statsdata.org/?id="+uid.String())
+			toDelete[uid.String()] = time.Now()
+			_, err = bot.Send(msg)
+			if err != nil {
+				return
+			}
 			return
 		}
 	}
-
-	msg = tgbotapi.NewMessage(message.Chat.ID, "Перейдите по ссылке чтобы загрузить файл: https://statsdata.org/?id="+uid.String())
-	toDelete[uid.String()] = time.Now()
-	bot.Send(msg)
 }
 
 func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
