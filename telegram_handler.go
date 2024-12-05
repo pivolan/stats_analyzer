@@ -45,25 +45,22 @@ func handleText(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	message := update.Message
 	users[uid.String()] = message.Chat.ID
 
-	if message.IsCommand() {
-		switch message.Command() {
-		case "start":
-			msg := tgbotapi.NewMessage(message.Chat.ID, welcomeText)
-			_, err := bot.Send(msg)
-			if err != nil {
-				return
-			}
-
-			time.Sleep(time.Second * 5)
-			msg = tgbotapi.NewMessage(message.Chat.ID, "Перейдите по ссылке чтобы загрузить файл: https://statsdata.org/?id="+uid.String())
-			toDelete[uid.String()] = time.Now()
-			_, err = bot.Send(msg)
-			if err != nil {
-				return
-			}
+	switch message.Command() {
+	case "start":
+		msg := tgbotapi.NewMessage(message.Chat.ID, welcomeText)
+		_, err := bot.Send(msg)
+		if err != nil {
 			return
 		}
 	}
+
+	msg := tgbotapi.NewMessage(message.Chat.ID, "Перейдите по ссылке чтобы загрузить файл: https://statsdata.org/?id="+uid.String())
+	toDelete[uid.String()] = time.Now()
+	_, err := bot.Send(msg)
+	if err != nil {
+		return
+	}
+
 }
 
 func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
