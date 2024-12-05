@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -16,8 +20,13 @@ func TestAnalyzeStatistics(t *testing.T) {
 	//groups
 }
 func TestCSV(t *testing.T) {
-	results := handleFile("/Users/igorpecenikin/Downloads/roularta_dataset/koef.csv")
-	results = handleFile("/Users/igorpecenikin/PhpstormProjects/bottalk/bfp-backend6/docs/Result_3.csv")
+	_, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		log.Fatalln("cannot connect to clickhouse", err)
+	}
+
+	//results := handleFile("/Users/igorpecenikin/Downloads/roularta_dataset/koef.csv")
+	results := handleFile("/Users/igorpecenikin/PhpstormProjects/bottalk/bfp-backend6/docs/_article_log_2.csv")
 	//results = handleFile("/Users/igorpecenikin/stripcash_billingTransactions.csv")
 	data, _ := json.MarshalIndent(results, "", "\t")
 	fmt.Printf("%+v\n", string(data))

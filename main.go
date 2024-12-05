@@ -17,19 +17,19 @@ import (
 var users = map[string]int64{}
 var bot *tgbotapi.BotAPI
 
-const DSN = "default:default@tcp(127.0.0.1:9004)/default"
+const DSN = "default:DfgjertGoddmERhU59@tcp(127.0.0.1:9004)/default"
 
 func main() {
 	fmt.Println("started")
-	_, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	_, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Info)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}
 	fmt.Println("connected clickhouse")
 
-	bot, err = tgbotapi.NewBotAPI("6232707025:AAECU6gOFwNwug-I7tjrWPq9ML6kOFBiru8")
+	bot, err = tgbotapi.NewBotAPI("7942803786:AAETzsvUHBnB2l3FvvNleWURe5w1TZRbzlY")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("tg error", err)
 	}
 	fmt.Println("bot init")
 

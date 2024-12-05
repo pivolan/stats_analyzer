@@ -2,7 +2,7 @@
 ROOT_PATH=$(cd $(dirname $0) && pwd);
 PROJECT_PATH='/root/stat_analyzer'
 
-CREDS='root@node_el'
+CREDS='root@iggy'
 echo $CREDS
 ssh $CREDS "mkdir -p $PROJECT_PATH/;cd $PROJECT_PATH/;go build -o stat_analyzer ."
 sleep 1
