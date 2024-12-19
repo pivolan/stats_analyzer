@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/pivolan/go_utils"
+	"github.com/pivolan/stats_analyzer/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -131,7 +132,8 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	}
 	fmt.Println(headers)
 	fmt.Println(types)
-	db, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	cfg := config.GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DbDsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}

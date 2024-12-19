@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pivolan/stats_analyzer/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -10,7 +11,8 @@ import (
 )
 
 func analyzeStatistics(tableName string) map[string]CommonStat {
-	db, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	cfg := config.GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DbDsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}

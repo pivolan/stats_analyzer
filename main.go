@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/joho/godotenv"
+	"github.com/pivolan/stats_analyzer/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -14,20 +16,38 @@ import (
 	"time"
 )
 
+type Application struct {
+	config *config.Config
+}
+
+func NewApplication() *Application {
+	cfg := config.GetConfig()
+
+	return &Application{
+		config: cfg,
+	}
+}
+
 var users = map[string]int64{}
 var bot *tgbotapi.BotAPI
 
-const DSN = "default:default@tcp(127.0.0.1:9004)/default"
+//const DSN = "default:@tcp(127.0.0.1:9004)/default"
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+	DbDsn := os.Getenv("DB_DSN")
+	tgToken := os.Getenv("TG_TOKEN")
 	fmt.Println("started")
-	_, err := gorm.Open(mysql.Open(DSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	_, err = gorm.Open(mysql.Open(DbDsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}
 	fmt.Println("connected clickhouse")
 
-	bot, err = tgbotapi.NewBotAPI("6232707025:AAECU6gOFwNwug-I7tjrWPq9ML6kOFBiru8")
+	bot, err = tgbotapi.NewBotAPI(tgToken)
 	if err != nil {
 		log.Fatal(err)
 	}
