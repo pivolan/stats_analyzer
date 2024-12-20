@@ -11,7 +11,6 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"log"
 	"os"
 	"reflect"
 	"regexp"
@@ -48,26 +47,61 @@ func replaceSpecialSymbols(input string) string {
 
 	return processedString
 }
+
 func importDataIntoClickHouse(filePath string) (string, error) {
 	sourceCSV := filePath
 	f, err := os.OpenFile(sourceCSV, os.O_RDONLY, 0655)
 	if err != nil {
 		return "", err
 	}
-	r := csv.NewReader(f)
-	//header
-	headers, err := r.Read()
-	//headers := []string{"id", "time", "project", "user", "type", "article", "audiofile", "articletype", "progress"}
-	typesWeight := []string{"", "DateTime64", "Date", "Int64", "Float64", "String"}
-	values, err := r.Read()
-	types := make([]string, len(values))
-	nullables := make([]string, len(values))
+	defer f.Close()
 
-	for u := 0; u < 50000; u++ {
-		values, err := r.Read()
+	r := csv.NewReader(f)
+
+	// Читаем и анализируем первую строку
+	firstRow, err := r.Read()
+	if err != nil {
+		return "", err
+	}
+
+	// Анализируем заголовки
+	headerAnalysis := AnalyzeHeaders(firstRow)
+	if headerAnalysis == nil {
+		return "", fmt.Errorf("empty CSV file")
+	}
+
+	// Проверяем и валидируем заголовки
+	headers := ValidateHeaders(headerAnalysis.Headers)
+
+	// Получаем первую строку данных
+	var dataRow []string
+	if headerAnalysis.FirstRowIsData {
+		dataRow = headerAnalysis.FirstDataRow
+	} else {
+		dataRow, err = r.Read()
 		if err != nil {
-			break
+			return "", err
 		}
+	}
+
+	// Определяем типы данных
+	typesWeight := []string{"", "DateTime64", "Date", "Int64", "Float64", "String"}
+	types := make([]string, len(dataRow))
+	nullables := make([]string, len(dataRow))
+
+	// Анализируем типы, начиная с первой строки данных
+	for i := 0; i < 50000; i++ {
+		var values []string
+		if i == 0 {
+			values = dataRow
+		} else {
+			var err error
+			values, err = r.Read()
+			if err != nil {
+				break
+			}
+		}
+
 		for n, value := range values {
 			f := ""
 			var v interface{}
@@ -96,6 +130,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 					}
 				}
 			}
+
 			t := ""
 			switch v.(type) {
 			case time.Time:
@@ -124,42 +159,23 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 			}
 		}
 	}
-	f.Seek(0, 0)
-	r = csv.NewReader(f)
-	headers, err = r.Read()
-	for i, header := range headers {
-		headers[i] = replaceSpecialSymbols(header)
-	}
-	fmt.Println(headers)
-	fmt.Println(types)
-	cfg := config.GetConfig()
-	db, err := gorm.Open(mysql.Open(cfg.DbDsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		log.Fatalln("cannot connect to clickhouse", err)
-	}
 
-	replacer := strings.NewReplacer(
-		" ", "",
-		".", "",
-		"_", "",
-	)
+	// Создаем таблицу
 	fields := []string{}
 	columns := []string{}
 	for i, header := range headers {
 		if types[i] == "" {
 			types[i] = "String"
 		}
-		fields = append(fields, fmt.Sprintf("%s %s %s", replacer.Replace(header), types[i], nullables[i]))
-		columns = append(columns, replacer.Replace(header))
+		fields = append(fields, fmt.Sprintf("%s %s %s", header, types[i], nullables[i]))
+		columns = append(columns, header)
 	}
-	tableName := strings.Join(columns, "_") + "_" + getMD5String(filePath)[:6]
-	if len(columns) > 2 {
-		tableName = strings.Join(columns[:3], "_") + "_" + getMD5String(filePath)[:6]
-	}
-	fmt.Println("tablename", tableName)
 
+	// Генерируем имя таблицы
+	tableName := strings.Join(columns[:min(3, len(columns))], "_") + "_" + getMD5String(filePath)[:6]
+
+	// Создаем SQL запрос
 	sql := `CREATE TABLE ` + tableName + ` (id UInt64,`
-	//if id already exists
 	idExists := false
 	for _, v := range headers {
 		if v == "id" {
@@ -168,16 +184,34 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 		}
 	}
 	sql += strings.Join(fields, ",\n") + fmt.Sprintf(") ENGINE = ReplacingMergeTree PRIMARY KEY (id) SETTINGS index_granularity = 8192")
+
+	// Подключаемся к базе данных
+	cfg := config.GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DbDsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		return "", err
+	}
+
+	// Создаем таблицу
 	tx := db.Exec("DROP TABLE IF EXISTS " + tableName)
-	fmt.Println(sql)
 	if tx.Error != nil {
-		log.Println("create table error", err)
 		return "", tx.Error
 	}
 	tx = db.Exec(sql)
 	if tx.Error != nil {
 		return "", tx.Error
 	}
+
+	// Возвращаемся к началу файла для импорта
+	f.Seek(0, 0)
+	r = csv.NewReader(f)
+
+	// Пропускаем заголовки, если они не являются данными
+	if !headerAnalysis.FirstRowIsData {
+		_, _ = r.Read()
+	}
+
+	// Импортируем данные
 	b := bytes.NewBufferString("")
 	csvWriter := csv.NewWriter(b)
 	i := 0
@@ -196,29 +230,36 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 			values = append([]string{strconv.Itoa(i)}, values...)
 		}
 		csvWriter.Write(values)
+
 		if i%5000 == 0 {
-			//save
 			csvWriter.Flush()
 			sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
-			//fmt.Println(b.String())
 			b.Reset()
 			tx = db.Exec(sql)
-			if err != nil {
-				return "", err
-			}
 			if tx.Error != nil {
-				log.Println(tx.Error)
 				return "", tx.Error
 			}
 		}
 	}
+
 	if b.Len() > 0 {
 		csvWriter.Flush()
 		sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
-		db.Exec(sql)
+		tx = db.Exec(sql)
+		if tx.Error != nil {
+			return "", tx.Error
+		}
 	}
-	fmt.Println("all saved, lines saved:", i)
+
 	return tableName, nil
+}
+
+// Вспомогательная функция для определения минимального значения
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 type ColumnInfo struct {
