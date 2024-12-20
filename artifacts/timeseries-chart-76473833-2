@@ -1,0 +1,14 @@
+
+        import React from 'react';
+        import TimeSeriesChart from './TimeSeriesChart';
+
+        export default function Chart() {
+            const data = [{"avg__orders_count":5,"avg__total_spent":150.5,"avg__user_id":1,"cnt":1,"common":"info","datetime":"2024-01-01","max__orders_count":5,"max__total_spent":150.5,"max__user_id":1,"median__orders_count":5,"median__total_spent":150.5,"median__user_id":1,"min__orders_count":5,"min__total_spent":150.5,"min__user_id":1}];
+            return (
+                <TimeSeriesChart 
+                    data={data} 
+                    title={"Детальный временной ряд (группировка по month)"} 
+                />
+            );
+        }
+        
