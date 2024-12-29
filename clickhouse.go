@@ -187,7 +187,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 
 	// Подключаемся к базе данных
 	cfg := config.GetConfig()
-	db, err := gorm.Open(mysql.Open(cfg.DbDsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		return "", err
 	}

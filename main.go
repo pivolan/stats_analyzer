@@ -16,38 +16,19 @@ import (
 	"time"
 )
 
-type Application struct {
-	config *config.Config
-}
-
-func NewApplication() *Application {
-	cfg := config.GetConfig()
-
-	return &Application{
-		config: cfg,
-	}
-}
-
 var users = map[string]int64{}
 var bot *tgbotapi.BotAPI
 
-//const DSN = "default:@tcp(127.0.0.1:9004)/default"
-
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	DbDsn := os.Getenv("DB_DSN")
-	tgToken := os.Getenv("TG_TOKEN")
+	cfg := config.GetConfig()
 	fmt.Println("started")
-	_, err = gorm.Open(mysql.Open(DbDsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	_, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}
 	fmt.Println("connected clickhouse")
 
-	bot, err = tgbotapi.NewBotAPI(tgToken)
+	bot, err = tgbotapi.NewBotAPI(cfg.TelegramToken)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -9,8 +9,8 @@ import (
 )
 
 type Config struct {
-	DbDsn   string
-	TgToken string
+	DatabaseDSN   string
+	TelegramToken string
 }
 
 var (
@@ -27,8 +27,8 @@ func GetConfig() *Config {
 		}
 
 		config = &Config{
-			DbDsn:   os.Getenv("DB_DSN"),
-			TgToken: os.Getenv("TG_TOKEN"),
+			DatabaseDSN:   os.Getenv("DATABASE_DSN"),
+			TelegramToken: os.Getenv("TELEGRAM_TOKEN"),
 		}
 	})
 	return config
