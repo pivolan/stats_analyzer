@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
@@ -47,17 +48,74 @@ func replaceSpecialSymbols(input string) string {
 
 	return processedString
 }
+func detectDelimiter(filePath string) (rune, error) {
+	f, err := os.OpenFile(filePath, os.O_RDONLY, 0655)
+	if err != nil {
+		return 0, fmt.Errorf("cannot open file: %v", err)
+	}
+	defer f.Close()
 
+	// Читаем первые 1000 байт файла для анализа
+	buffer := make([]byte, 1000)
+	n, err := f.Read(buffer)
+	if err != nil && err != io.EOF {
+		return 0, fmt.Errorf("cannot read file: %v", err)
+	}
+	sample := string(buffer[:n])
+
+	// Популярные разделители для проверки
+	delimiters := []rune{',', ';', '\t', '|'}
+	maxCount := 0
+	bestDelimiter := rune(',') // По умолчанию запятая
+
+	// Проверяем первые несколько строк
+	lines := strings.Split(sample, "\n")
+	if len(lines) > 0 {
+		firstLine := lines[0]
+
+		for _, delimiter := range delimiters {
+			count := strings.Count(firstLine, string(delimiter))
+			// Проверяем последовательность для других строк
+			isConsistent := true
+			for i := 1; i < len(lines) && i < 5; i++ {
+				if strings.Count(lines[i], string(delimiter)) != count {
+					isConsistent = false
+					break
+				}
+			}
+
+			if count > maxCount && isConsistent {
+				maxCount = count
+				bestDelimiter = delimiter
+			}
+		}
+	}
+
+	if maxCount == 0 {
+		return 0, fmt.Errorf("cannot detect delimiter, no consistent pattern found")
+	}
+
+	return bestDelimiter, nil
+}
 func importDataIntoClickHouse(filePath string) (string, error) {
-	sourceCSV := filePath
-	f, err := os.OpenFile(sourceCSV, os.O_RDONLY, 0655)
+	delimiter, err := detectDelimiter(filePath)
+	if err != nil {
+		return "", fmt.Errorf("error detecting delimiter: %v", err)
+	}
+
+	f, err := os.OpenFile(filePath, os.O_RDONLY, 0655)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
 	r := csv.NewReader(f)
+	r.Comma = delimiter // Устанавливаем обнаруженный разделитель
 
+	// Дополнительные настройки для более надежного парсинга
+	r.FieldsPerRecord = -1    // Разрешаем переменное количество полей
+	r.LazyQuotes = true       // Более гибкая обработка кавычек
+	r.TrimLeadingSpace = true // Убираем начальные пробелы
 	// Читаем и анализируем первую строку
 	firstRow, err := r.Read()
 	if err != nil {
@@ -205,7 +263,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	// Возвращаемся к началу файла для импорта
 	f.Seek(0, 0)
 	r = csv.NewReader(f)
-
+	r.Comma = delimiter
 	// Пропускаем заголовки, если они не являются данными
 	if !headerAnalysis.FirstRowIsData {
 		_, _ = r.Read()
@@ -214,7 +272,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	// Импортируем данные
 	b := bytes.NewBufferString("")
 	csvWriter := csv.NewWriter(b)
-	i := 0
+	i := 1
 	for ; ; i++ {
 		values, err := r.Read()
 		if err != nil {
@@ -229,6 +287,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 		if !idExists {
 			values = append([]string{strconv.Itoa(i)}, values...)
 		}
+
 		csvWriter.Write(values)
 
 		if i%5000 == 0 {
@@ -242,8 +301,8 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 		}
 	}
 
+	csvWriter.Flush()
 	if b.Len() > 0 {
-		csvWriter.Flush()
 		sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
 		tx = db.Exec(sql)
 		if tx.Error != nil {

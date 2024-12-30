@@ -16,9 +16,7 @@ func TestAnalyzeStatistics(t *testing.T) {
 	//groups
 }
 func TestCSV(t *testing.T) {
-	results := handleFile("/Users/igorpecenikin/Downloads/roularta_dataset/koef.csv")
-	results = handleFile("/Users/igorpecenikin/PhpstormProjects/bottalk/bfp-backend6/docs/Result_3.csv")
-	//results = handleFile("/Users/igorpecenikin/stripcash_billingTransactions.csv")
+	results := handleFile("/Users/igorpecenikin/Downloads/sales-data(1) (1).md")
 	data, _ := json.MarshalIndent(results, "", "\t")
 	fmt.Printf("%+v\n", string(data))
 }
