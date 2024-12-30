@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/joho/godotenv"
 	"github.com/pivolan/stats_analyzer/config"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
