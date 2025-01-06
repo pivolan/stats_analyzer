@@ -9,175 +9,291 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-)
 
-import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func GenerateTable(stats map[string]CommonStat) string {
-	// Create a new table with a Key column and columns for each field in the CommonStat struct
 	t := table.NewWriter()
 	t1 := reflect.TypeOf(CommonStat{})
 
-	// Loop over the fields in the struct and print their names
-	fields := table.Row{"FieldName"}
+	// Определяем, какие поля содержат данные
+	usedFields := make(map[string]bool)
+	for _, v := range stats {
+		val := reflect.ValueOf(v)
+		for i := 0; i < t1.NumField(); i++ {
+			field := t1.Field(i)
+			value := val.FieldByName(field.Name)
+
+			// Проверяем, есть ли значение в поле
+			if field.Type.Kind() == reflect.Int64 && value.Int() != 0 {
+				usedFields[field.Name] = true
+			} else if field.Type.Kind() == reflect.Float64 && value.Float() != 0 {
+				usedFields[field.Name] = true
+			}
+		}
+	}
+
+	// Создаем отсортированный список используемых полей
+	sortedFields := make([]string, 0)
 	for i := 0; i < t1.NumField(); i++ {
 		field := t1.Field(i)
-		fmt.Println(field.Name)
-		fields = append(fields, field.Name)
+		if usedFields[field.Name] {
+			sortedFields = append(sortedFields, field.Name)
+		}
+	}
+	sort.Strings(sortedFields)
+
+	// Создаем заголовок с отсортированными полями
+	fields := table.Row{"FieldName"}
+	for _, fieldName := range sortedFields {
+		fields = append(fields, fieldName)
 	}
 	t.AppendHeader(fields)
 
-	// Loop over each key in the map and add a row to the table
+	// Собираем все строки для сортировки
+	var rows []table.Row
 	for k, v := range stats {
-		values := make([]interface{}, len(fields))
-		values[0] = k
+		values := make([]interface{}, 0)
+		values = append(values, k)
 
-		// Loop over the fields in the CommonStat struct and add their values to the row
-		for i, h := range fields[1:] {
-			if f, ok := reflect.TypeOf(v).FieldByName(h.(string)); ok {
+		hasNonZeroValues := false
+		for _, fieldName := range sortedFields {
+			if f, ok := reflect.TypeOf(v).FieldByName(fieldName); ok {
 				if f.Type.Kind() == reflect.Int64 {
-					values[i+1] = reflect.ValueOf(v).FieldByName(h.(string)).Int()
+					val := reflect.ValueOf(v).FieldByName(fieldName).Int()
+					values = append(values, val)
+					if val != 0 {
+						hasNonZeroValues = true
+					}
 				} else if f.Type.Kind() == reflect.Float64 {
-					val := reflect.ValueOf(v).FieldByName(h.(string)).Float()
+					val := reflect.ValueOf(v).FieldByName(fieldName).Float()
+					if val != 0 {
+						hasNonZeroValues = true
+					}
 					a := strconv.FormatFloat(val, 'f', 3, 64)
 					a = strings.TrimRight(a, "0")
 					a = strings.TrimRight(a, ".")
-
-					values[i+1] = a
-				} else {
-					values[i+1] = ""
+					values = append(values, a)
 				}
 			}
 		}
 
-		// Add a new row to the table with the key and values from the CommonStat struct
-		t.AppendRows([]table.Row{values})
+		// Добавляем строку только если в ней есть ненулевые значения
+		if hasNonZeroValues || k == "all" {
+			rows = append(rows, values)
+		}
 	}
 
-	// Set the output format of the table to Markdown
-	t.SetStyle(table.StyleDefault)
+	// Сортируем строки с учетом натуральной сортировки
+	sort.Slice(rows, func(i, j int) bool {
+		// Специальная обработка для строки "all" - она всегда должна быть первой
+		if rows[i][0].(string) == "all" {
+			return true
+		}
+		if rows[j][0].(string) == "all" {
+			return false
+		}
 
-	// Render the table and return it as a string
+		// Разбиваем строки на части
+		str1 := rows[i][0].(string)
+		str2 := rows[j][0].(string)
+
+		// Находим числовые части в строках
+		num1Str := strings.TrimPrefix(str1, "column_")
+		num2Str := strings.TrimPrefix(str2, "column_")
+
+		// Преобразуем в числа и сравниваем
+		num1, _ := strconv.Atoi(num1Str)
+		num2, _ := strconv.Atoi(num2Str)
+
+		return num1 < num2
+	})
+
+	t.AppendRows(rows)
+	t.SetStyle(table.StyleDefault)
 	return t.Render()
 }
-func GenerateGroupsTables(stats map[string]CommonStat) []string {
-	// Create a new table with a Key column and columns for each field in the CommonStat struct
-	result := []string{}
-	// Loop over each key in the map and add a row to the table
-	for _, v := range stats {
-		t := table.NewWriter()
 
-		// Loop over the fields in the struct and print their names
-		fields := table.Row{}
+func GenerateGroupsTables(stats map[string]CommonStat) []string {
+	result := []string{}
+
+	for _, v := range stats {
 		if len(v.Groups) == 0 {
 			continue
 		}
-		mapRevert := map[string]int{}
-		i := 0
-		header := []string{}
 
-		for columnName, _ := range v.Groups[0] {
+		t := table.NewWriter()
+
+		// Находим колонки, содержащие ненулевые значения
+		usedColumns := make(map[string]bool)
+		for _, row := range v.Groups {
+			for columnName, value := range row {
+				// Проверяем числовые значения и строки
+				switch val := value.(type) {
+				case float64:
+					if val != 0 {
+						usedColumns[columnName] = true
+					}
+				case int64:
+					if val != 0 {
+						usedColumns[columnName] = true
+					}
+				case string:
+					if val != "" {
+						usedColumns[columnName] = true
+					}
+				}
+			}
+		}
+
+		// Получаем и сортируем имена используемых колонок
+		header := make([]string, 0)
+		for columnName := range usedColumns {
 			header = append(header, columnName)
 		}
 		sort.Strings(header)
+
+		// Если нет используемых колонок, пропускаем таблицу
+		if len(header) == 0 {
+			continue
+		}
+
+		// Создаем отображение для индексов колонок
+		columnIndices := make(map[string]int)
+		for i, columnName := range header {
+			columnIndices[columnName] = i
+		}
+
+		// Добавляем отсортированный заголовок
+		fields := table.Row{}
 		for _, columnName := range header {
 			fields = append(fields, columnName)
-			mapRevert[columnName] = i
-			i++
 		}
-
 		t.AppendHeader(fields)
 
+		// Добавляем данные в отсортированном порядке
 		for _, data := range v.Groups {
-			values := make([]interface{}, len(data))
+			values := make([]interface{}, len(header))
+			hasData := false
 			for column, value := range data {
-				values[mapRevert[column]] = value
+				if usedColumns[column] {
+					values[columnIndices[column]] = value
+					hasData = true
+				}
 			}
-			t.AppendRows([]table.Row{values})
+			if hasData {
+				t.AppendRows([]table.Row{values})
+			}
 		}
 
-		// Add a new row to the table with the key and values from the CommonStat struct
 		t.SetStyle(table.StyleDefault)
-
 		result = append(result, t.Render())
 	}
 
-	// Set the output format of the table to Markdown
-	// Render the table and return it as a string
 	return result
 }
+
 func GenerateCSVByDates(stats map[string]CommonStat) map[string]string {
-	result := map[string]string{}
+	result := make(map[string]string)
 
-	// Loop over each key in the map and add a row to the table
 	for name, v := range stats {
-		var buffer bytes.Buffer
-		t := csv.NewWriter(&buffer)
-
-		// Loop over the fields in the struct and print their names
-		fields := []string{}
 		if len(v.Dates) == 0 {
 			continue
 		}
-		mapRevert := map[string]int{}
-		i := 0
-		header := []string{}
 
-		for columnName, _ := range v.Dates[0] {
+		var buffer bytes.Buffer
+		writer := csv.NewWriter(&buffer)
+
+		// Находим колонки, содержащие ненулевые значения
+		usedColumns := make(map[string]bool)
+		for _, row := range v.Dates {
+			for columnName, value := range row {
+				// Проверяем числовые значения и строки
+				switch val := value.(type) {
+				case float64:
+					if val != 0 {
+						usedColumns[columnName] = true
+					}
+				case int64:
+					if val != 0 {
+						usedColumns[columnName] = true
+					}
+				case string:
+					if val != "" {
+						usedColumns[columnName] = true
+					}
+				}
+			}
+		}
+
+		// Получаем и сортируем имена используемых колонок
+		header := make([]string, 0)
+		for columnName := range usedColumns {
 			header = append(header, columnName)
 		}
 		sort.Strings(header)
-		for _, columnName := range header {
-			fields = append(fields, columnName)
-			mapRevert[columnName] = i
-			i++
+
+		// Если нет используемых колонок, пропускаем файл
+		if len(header) == 0 {
+			continue
 		}
 
-		t.Write(fields)
+		// Записываем отсортированный заголовок
+		writer.Write(header)
 
+		// Создаем отображение для индексов колонок
+		columnIndices := make(map[string]int)
+		for i, columnName := range header {
+			columnIndices[columnName] = i
+		}
+
+		// Записываем данные в отсортированном порядке
 		for _, data := range v.Dates {
-			values := make([]string, len(data))
+			values := make([]string, len(header))
+			hasData := false
 			for column, value := range data {
-				values[mapRevert[column]] = fmt.Sprint(value)
+				if usedColumns[column] {
+					values[columnIndices[column]] = fmt.Sprint(value)
+					hasData = true
+				}
 			}
-			t.Write(values)
+			if hasData {
+				writer.Write(values)
+			}
 		}
 
-		// Add a new row to the table with the key and values from the CommonStat struct
-		t.Flush()
+		writer.Flush()
 		result[name] = buffer.String()
 	}
 
-	// Set the output format of the table to Markdown
-	// Render the table and return it as a string
 	return result
 }
+
 func ZipArchive(csvs map[string]string) []byte {
 	var buffer bytes.Buffer
-
-	// Step 2: Create a new ZIP writer using the buffer
 	zipWriter := zip.NewWriter(&buffer)
 
-	// Step 3: For each string/file pair
-	for i, content := range csvs {
-		// Create a new entry using the header
-		writer, err := zipWriter.Create(fmt.Sprintf("%s.csv", i))
+	// Получаем и сортируем имена файлов
+	fileNames := make([]string, 0)
+	for name := range csvs {
+		fileNames = append(fileNames, name)
+	}
+	sort.Strings(fileNames)
+
+	// Записываем файлы в отсортированном порядке
+	for _, name := range fileNames {
+		writer, err := zipWriter.Create(fmt.Sprintf("%s.csv", name))
 		if err != nil {
 			return nil
 		}
 
-		// Write the string content to this entry
-		_, err = writer.Write([]byte(content))
+		_, err = writer.Write([]byte(csvs[name]))
 		if err != nil {
 			return nil
 		}
 	}
 
-	// Step 4: Close the ZIP writer
 	zipWriter.Close()
-
-	// Print the ZIP content for demonstration (usually you'd save this to a file or send it somewhere)
 	return buffer.Bytes()
 }
