@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/go-telegram-bot-api/telegram-bot-api"
-	uuid "github.com/satori/go.uuid"
 	"io"
 	"log"
 	"math"
@@ -14,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	uuid "github.com/satori/go.uuid"
 )
 
 var toDelete = map[string]time.Time{}
@@ -63,10 +64,17 @@ func handleText(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 - "1,2,3,4,5"
 - "1\n2\n3\n4\n5"
 `
-
-	switch message.Command() {
+	if message != nil && message.IsCommand() {
+		args := strings.TrimSpace(update.Message.CommandArguments())
+		parts := strings.Split(args, " ")
+		if len(parts) == 1 && parts[0] == "" {
+			parts = []string{}
+		}
+	}
+	switch update.Message.Command() {
 	case "start":
 		msg := tgbotapi.NewMessage(message.Chat.ID, welcomeText)
+
 		_, err := bot.Send(msg)
 		if err != nil {
 			return

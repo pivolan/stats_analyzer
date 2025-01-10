@@ -40,7 +40,9 @@ func AnalyzeHeaders(firstRow []string) *HeaderAnalysis {
 		result.FirstRowIsData = false
 		// Очищаем существующие заголовки
 		for i, header := range firstRow {
+
 			result.Headers[i] = cleanHeaderName(header, i)
+
 		}
 	} else {
 		// Генерируем заголовки для данных
@@ -166,7 +168,9 @@ func cleanHeaderName(header string, index int) string {
 	if cleaned == "" {
 		return generateColumnName(index)
 	}
-
+	if !isLikelyHeader(header) {
+		return generateColumnName(index)
+	}
 	// Приводим к нижнему регистру для консистентности
 	return strings.ToLower(cleaned)
 }

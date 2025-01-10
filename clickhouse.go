@@ -6,11 +6,6 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
-	"github.com/pivolan/go_utils"
-	"github.com/pivolan/stats_analyzer/config"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"io"
 	"os"
 	"reflect"
@@ -18,7 +13,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pivolan/go_utils"
+	"github.com/pivolan/stats_analyzer/config"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
+
+var ChanelOriginOrder = make(chan []string, 100)
 
 func getMD5String(input string) string {
 	hasher := md5.New()
@@ -118,6 +121,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	r.TrimLeadingSpace = true // Убираем начальные пробелы
 	// Читаем и анализируем первую строку
 	firstRow, err := r.Read()
+
 	if err != nil {
 		return "", err
 	}
@@ -130,7 +134,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 
 	// Проверяем и валидируем заголовки
 	headers := ValidateHeaders(headerAnalysis.Headers)
-
+	ChanelOriginOrder <- headers
 	// Получаем первую строку данных
 	var dataRow []string
 	if headerAnalysis.FirstRowIsData {
@@ -148,7 +152,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	nullables := make([]string, len(dataRow))
 
 	// Анализируем типы, начиная с первой строки данных
-	for i := 0; i < 50000; i++ {
+	for i := 1; i < 50000; i++ {
 		var values []string
 		if i == 0 {
 			values = dataRow
@@ -439,14 +443,18 @@ func (c *CommonStat) Set(key string, value interface{}) error {
 func parseUniqResults(uniqResults map[string]interface{}) (result map[string]CommonStat) {
 	result = map[string]CommonStat{}
 	for field, value := range uniqResults {
-		result[field] = CommonStat{Uniq: value.(int64)}
+		if value.(int64) != 0 {
+			result[field] = CommonStat{Uniq: value.(int64)}
+		}
 	}
 	return
 }
 func parseCountResults(countResults map[string]interface{}) (result map[string]CommonStat) {
 	result = map[string]CommonStat{}
 	for _, value := range countResults {
-		result["all"] = CommonStat{Count: value.(int64)}
+		if value.(int64) != 0 {
+			result["all"] = CommonStat{Count: value.(int64)}
+		}
 	}
 	return
 }
@@ -472,13 +480,15 @@ func mergeStat(results ...map[string]CommonStat) (response map[string]CommonStat
 	response = map[string]CommonStat{}
 	for _, result := range results {
 		for field, values := range result {
-			_ = values
-			if _, ok := response[field]; !ok {
-				response[field] = CommonStat{}
+
+			{
+				if _, ok := response[field]; !ok {
+					response[field] = CommonStat{}
+				}
+				stat := response[field]
+				setZeroFields(&stat, values)
+				response[field] = stat
 			}
-			stat := response[field]
-			setZeroFields(&stat, values)
-			response[field] = stat
 		}
 	}
 	return

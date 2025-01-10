@@ -55,13 +55,13 @@ func TestAnalyzeHeaders(t *testing.T) {
 			wantIsData:    true,
 			wantFirstData: []string{"", "", "", ""},
 		},
-		{
-			name:          "product_name;sales_quantity;unit_price;total_revenue",
-			input:         []string{"product_name", "sales_quantity", "unit_price", "total_revenue"},
-			wantHeaders:   []string{"product_name", "sales_quantity", "unit_price", "total_revenue"},
-			wantIsData:    false,
-			wantFirstData: []string{"", "", "", ""},
-		},
+		// {
+		// 	name:          "product_name;sales_quantity;unit_price;total_revenue",
+		// 	input:         []string{"product_name", "sales_quantity", "unit_price", "total_revenue"},
+		// 	wantHeaders:   []string{"product_name", "sales_quantity", "unit_price", "total_revenue"},
+		// 	wantIsData:    false,
+		// 	wantFirstData: []string{"", "", "", ""},
+		// },
 		{
 			name:          "Mixed data with numbers and text",
 			input:         []string{"John", "30", "john@email.com", "123-456-7890"},

@@ -13,52 +13,54 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
+type SortableRow struct {
+	FieldName string
+	Values    []interface{}
+	Original  table.Row
+}
+
 func GenerateTable(stats map[string]CommonStat) string {
 	t := table.NewWriter()
 	t1 := reflect.TypeOf(CommonStat{})
+	commonStatCH := <-ChanelOriginOrder
 
-	// Определяем, какие поля содержат данные
-	usedFields := make(map[string]bool)
-	for _, v := range stats {
-		val := reflect.ValueOf(v)
-		for i := 0; i < t1.NumField(); i++ {
-			field := t1.Field(i)
-			value := val.FieldByName(field.Name)
+	// Определяем, какие поля содержат данные и сохраняем их в порядке определения в структуре
+	usedFields := make([]string, 0)
 
-			// Проверяем, есть ли значение в поле
-			if field.Type.Kind() == reflect.Int64 && value.Int() != 0 {
-				usedFields[field.Name] = true
-			} else if field.Type.Kind() == reflect.Float64 && value.Float() != 0 {
-				usedFields[field.Name] = true
-			}
-		}
-	}
-
-	// Создаем отсортированный список используемых полей
-	sortedFields := make([]string, 0)
 	for i := 0; i < t1.NumField(); i++ {
 		field := t1.Field(i)
-		if usedFields[field.Name] {
-			sortedFields = append(sortedFields, field.Name)
+
+		for _, v := range stats {
+			val := reflect.ValueOf(v)
+			value := val.FieldByName(field.Name)
+
+			if field.Type.Kind() == reflect.Int64 && value.Int() != 0 {
+				usedFields = append(usedFields, field.Name)
+				break
+			} else if field.Type.Kind() == reflect.Float64 && value.Float() != 0 {
+				usedFields = append(usedFields, field.Name)
+				break
+			}
+
 		}
 	}
-	sort.Strings(sortedFields)
 
-	// Создаем заголовок с отсортированными полями
+	// Создаем заголовок с сохраненным порядком полей
 	fields := table.Row{"FieldName"}
-	for _, fieldName := range sortedFields {
+	for _, fieldName := range usedFields {
 		fields = append(fields, fieldName)
 	}
 	t.AppendHeader(fields)
 
 	// Собираем все строки для сортировки
-	var rows []table.Row
+	var sortableRows []SortableRow
+
 	for k, v := range stats {
 		values := make([]interface{}, 0)
 		values = append(values, k)
 
 		hasNonZeroValues := false
-		for _, fieldName := range sortedFields {
+		for _, fieldName := range usedFields {
 			if f, ok := reflect.TypeOf(v).FieldByName(fieldName); ok {
 				if f.Type.Kind() == reflect.Int64 {
 					val := reflect.ValueOf(v).FieldByName(fieldName).Int()
@@ -79,38 +81,49 @@ func GenerateTable(stats map[string]CommonStat) string {
 			}
 		}
 
-		// Добавляем строку только если в ней есть ненулевые значения
 		if hasNonZeroValues || k == "all" {
-			rows = append(rows, values)
+			row := table.Row(values)
+			sortableRow := SortableRow{
+				FieldName: k,
+				Values:    values,
+				Original:  row,
+			}
+			sortableRows = append(sortableRows, sortableRow)
 		}
 	}
 
-	// Сортируем строки с учетом натуральной сортировки
-	sort.Slice(rows, func(i, j int) bool {
-		// Специальная обработка для строки "all" - она всегда должна быть первой
-		if rows[i][0].(string) == "all" {
-			return true
-		}
-		if rows[j][0].(string) == "all" {
+	// Сортируем только для перемещения "all" в конец
+	sort.Slice(sortableRows, func(i, j int) bool {
+		// Special handling for "all" row - it should always be last
+
+		if sortableRows[i].FieldName == "all" {
 			return false
 		}
+		if sortableRows[j].FieldName == "all" {
+			return true
+		}
+		// Сохраняем исходный порядок для остальных строк
 
-		// Разбиваем строки на части
-		str1 := rows[i][0].(string)
-		str2 := rows[j][0].(string)
-
-		// Находим числовые части в строках
-		num1Str := strings.TrimPrefix(str1, "column_")
-		num2Str := strings.TrimPrefix(str2, "column_")
-
-		// Преобразуем в числа и сравниваем
-		num1, _ := strconv.Atoi(num1Str)
-		num2, _ := strconv.Atoi(num2Str)
-
-		return num1 < num2
+		return i < j
 	})
+	// var sortableRow1 []SortableRow
+	commonStatCH = append(commonStatCH, "all")
+	for i := range commonStatCH {
+		for v := range sortableRows {
+			if commonStatCH[i] == sortableRows[v].FieldName {
+				sortableRows[v], sortableRows[i] = sortableRows[i], sortableRows[v]
+				// sortableRow1 = append(sortableRow1, sortableRows[v])
+				break
+			}
+		}
 
-	t.AppendRows(rows)
+	}
+
+	// Добавляем отсортированные строки
+	for _, row := range sortableRows {
+		t.AppendRow(row.Original)
+	}
+
 	t.SetStyle(table.StyleDefault)
 	return t.Render()
 }
@@ -232,6 +245,7 @@ func GenerateCSVByDates(stats map[string]CommonStat) map[string]string {
 		for columnName := range usedColumns {
 			header = append(header, columnName)
 		}
+		fmt.Println("###################################", header, "######################################")
 		sort.Strings(header)
 
 		// Если нет используемых колонок, пропускаем файл
