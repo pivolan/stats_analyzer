@@ -2,19 +2,22 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/pivolan/stats_analyzer/config"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/pivolan/stats_analyzer/config"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
+// DfgjertGoddmERhU59 click
+// 7975342417:AAHusII9MKeJb9OeVscUnZnvMnVwC7wDE0U tg
 var users = map[string]int64{}
 var bot *tgbotapi.BotAPI
 
