@@ -142,12 +142,25 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	// Отправляем основную статистику
 	formattedText := GenerateTable(stat)
 	formattedTexts := GenerateGroupsTables(stat)
+	i := "<pre>\n" + formattedText + "\n</pre>"
+	if len(i) < 4096 {
+		msg := tgbotapi.NewMessage(chatId, i)
 
-	msg := tgbotapi.NewMessage(chatId, "<pre>\n"+formattedText+"\n</pre>")
-	msg.ParseMode = tgbotapi.ModeHTML
-	_, err := bot.Send(msg)
-	if err != nil {
-		return
+		msg.ParseMode = tgbotapi.ModeHTML
+		_, err := bot.Send(msg)
+
+		if err != nil {
+			return
+		}
+	} else {
+		msg := tgbotapi.NewMessage(chatId, "Таблица слишком большая для вывода")
+
+		msg.ParseMode = tgbotapi.ModeHTML
+		_, err := bot.Send(msg)
+
+		if err != nil {
+			return
+		}
 	}
 
 	// Отправляем файлы с общей информацией
@@ -157,7 +170,7 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	}
 	msg2 := tgbotapi.NewDocumentUpload(chatId, data)
 	msg2.Caption = "Общая статистика"
-	_, err = bot.Send(msg2)
+	_, err := bot.Send(msg2)
 	if err != nil {
 		return
 	}

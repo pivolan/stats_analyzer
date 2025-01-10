@@ -92,22 +92,6 @@ func GenerateTable(stats map[string]CommonStat) string {
 		}
 	}
 
-	// Сортируем только для перемещения "all" в конец
-	sort.Slice(sortableRows, func(i, j int) bool {
-		// Special handling for "all" row - it should always be last
-
-		if sortableRows[i].FieldName == "all" {
-			return false
-		}
-		if sortableRows[j].FieldName == "all" {
-			return true
-		}
-		// Сохраняем исходный порядок для остальных строк
-
-		return i < j
-	})
-	// var sortableRow1 []SortableRow
-	commonStatCH = append(commonStatCH, "all")
 	for i := range commonStatCH {
 		for v := range sortableRows {
 			if commonStatCH[i] == sortableRows[v].FieldName {
@@ -116,6 +100,21 @@ func GenerateTable(stats map[string]CommonStat) string {
 				break
 			}
 		}
+		// Сортируем только для перемещения "all" в конец
+		sort.Slice(sortableRows, func(i, j int) bool {
+			// Special handling for "all" row - it should always be last
+
+			if sortableRows[i].FieldName == "all" {
+				return false
+			}
+			if sortableRows[j].FieldName == "all" {
+				return true
+			}
+			// Сохраняем исходный порядок для остальных строк
+
+			return i < j
+		})
+		// commonStatCH = append(commonStatCH, "all")
 
 	}
 
