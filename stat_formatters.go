@@ -22,7 +22,6 @@ type SortableRow struct {
 func GenerateTable(stats map[string]CommonStat) string {
 	t := table.NewWriter()
 	t1 := reflect.TypeOf(CommonStat{})
-	commonStatCH := <-ChanelOriginOrder
 
 	// Определяем, какие поля содержат данные и сохраняем их в порядке определения в структуре
 	usedFields := make([]string, 0)
@@ -90,32 +89,6 @@ func GenerateTable(stats map[string]CommonStat) string {
 			}
 			sortableRows = append(sortableRows, sortableRow)
 		}
-	}
-
-	for i := range commonStatCH {
-		for v := range sortableRows {
-			if commonStatCH[i] == sortableRows[v].FieldName {
-				sortableRows[v], sortableRows[i] = sortableRows[i], sortableRows[v]
-				// sortableRow1 = append(sortableRow1, sortableRows[v])
-				break
-			}
-		}
-		// Сортируем только для перемещения "all" в конец
-		sort.Slice(sortableRows, func(i, j int) bool {
-			// Special handling for "all" row - it should always be last
-
-			if sortableRows[i].FieldName == "all" {
-				return false
-			}
-			if sortableRows[j].FieldName == "all" {
-				return true
-			}
-			// Сохраняем исходный порядок для остальных строк
-
-			return i < j
-		})
-		// commonStatCH = append(commonStatCH, "all")
-
 	}
 
 	// Добавляем отсортированные строки

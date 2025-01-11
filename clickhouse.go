@@ -6,7 +6,9 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
+	uuid "github.com/satori/go.uuid"
 	"io"
+	"log"
 	"os"
 	"reflect"
 	"regexp"
@@ -15,21 +17,22 @@ import (
 	"time"
 
 	"github.com/pivolan/go_utils"
-	"github.com/pivolan/stats_analyzer/config"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
-var ChanelOriginOrder = make(chan []string, 100)
+type DBInterface interface {
+	Exec(query string, values ...interface{}) *gorm.DB
+}
 
-func getMD5String(input string) string {
+var getMD5String = func(input string) string {
+	prefix := uuid.NewV1().String()[:6]
 	hasher := md5.New()
 	hasher.Write([]byte(input))
 	hashBytes := hasher.Sum(nil)
 	hashString := hex.EncodeToString(hashBytes)
-	return hashString
+	return prefix + hashString
 }
+
 func SearchStrings(a []string, x string) int {
 	for i, s := range a {
 		if s == x {
@@ -100,10 +103,11 @@ func detectDelimiter(filePath string) (rune, error) {
 
 	return bestDelimiter, nil
 }
-func importDataIntoClickHouse(filePath string) (string, error) {
+func importDataIntoClickHouse(filePath string, db DBInterface) (string, error) {
 	delimiter, err := detectDelimiter(filePath)
 	if err != nil {
-		return "", fmt.Errorf("error detecting delimiter: %v", err)
+		log.Println(fmt.Errorf("error detecting delimiter: %v", err))
+		delimiter = ','
 	}
 
 	f, err := os.OpenFile(filePath, os.O_RDONLY, 0655)
@@ -134,7 +138,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 
 	// Проверяем и валидируем заголовки
 	headers := ValidateHeaders(headerAnalysis.Headers)
-	ChanelOriginOrder <- headers
+
 	// Получаем первую строку данных
 	var dataRow []string
 	if headerAnalysis.FirstRowIsData {
@@ -152,7 +156,7 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 	nullables := make([]string, len(dataRow))
 
 	// Анализируем типы, начиная с первой строки данных
-	for i := 1; i < 50000; i++ {
+	for i := 0; i < 50000; i++ {
 		var values []string
 		if i == 0 {
 			values = dataRow
@@ -246,13 +250,6 @@ func importDataIntoClickHouse(filePath string) (string, error) {
 		}
 	}
 	sql += strings.Join(fields, ",\n") + fmt.Sprintf(") ENGINE = ReplacingMergeTree PRIMARY KEY (id) SETTINGS index_granularity = 8192")
-
-	// Подключаемся к базе данных
-	cfg := config.GetConfig()
-	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	if err != nil {
-		return "", err
-	}
 
 	// Создаем таблицу
 	tx := db.Exec("DROP TABLE IF EXISTS " + tableName)

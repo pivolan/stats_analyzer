@@ -3,6 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/pivolan/stats_analyzer/config"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"io"
 	"log"
 	"math"
@@ -131,11 +135,11 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 	}
 
 	// Unpack archive if necessary
-	go func() {
+	go func(filePath string, chatId int64) {
 		stat := handleFile(filePath)
-		sendStats(message.Chat.ID, stat, bot)
+		sendStats(chatId, stat, bot)
 		//files with dates
-	}()
+	}(filePath, message.Chat.ID)
 }
 
 func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
@@ -303,7 +307,15 @@ func handleFile(filePath string) map[string]CommonStat {
 	}
 
 	// Import data into ClickHouse
-	tableName, err := importDataIntoClickHouse(filePath)
+	// Подключаемся к базе данных
+	cfg := config.GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		log.Println("error on connect to clickhouse", err)
+		return nil
+	}
+
+	tableName, err := importDataIntoClickHouse(filePath, db)
 	if err != nil {
 		log.Printf("Error importing data into ClickHouse: %v", err)
 		return nil
