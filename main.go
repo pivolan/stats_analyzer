@@ -26,10 +26,22 @@ var bot *tgbotapi.BotAPI
 func main() {
 	cfg := config.GetConfig()
 	fmt.Println("started")
-	_, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}
+	go func() {
+		for {
+			<-time.Tick(time.Second)
+			for table, timer := range toDeleteTable {
+				if time.Now().After(timer) {
+					db.Exec(fmt.Sprintf(`drop table "%s"`, string(table)))
+					delete(toDeleteTable, table)
+					log.Println("dropped table", table)
+				}
+			}
+		}
+	}()
 	fmt.Println("connected clickhouse")
 
 	bot, err = tgbotapi.NewBotAPI(cfg.TelegramToken)

@@ -15,6 +15,89 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
+func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
+	var result strings.Builder
+
+	// Total Records
+	if allStat, ok := stats["all"]; ok {
+		result.WriteString(fmt.Sprintf("📊 Total Records: %d\n\n", allStat.Count))
+	}
+
+	// Collect numeric and string columns
+	var numericColumns, stringColumns []string
+	for field, stat := range stats {
+		if field == "all" {
+			continue
+		}
+		if stat.IsNumeric {
+			numericColumns = append(numericColumns, field)
+		} else if stat.Uniq > 0 || len(stat.Groups) > 0 {
+			stringColumns = append(stringColumns, field)
+		}
+	}
+
+	// Sort columns alphabetically
+	sort.Strings(numericColumns)
+	sort.Strings(stringColumns)
+
+	// Numeric Columns
+	if len(numericColumns) > 0 {
+		result.WriteString("📈 Numeric Columns:\n")
+		for _, field := range numericColumns {
+			stat := stats[field]
+			result.WriteString(fmt.Sprintf("• %s\n", field[5:]))
+			result.WriteString(fmt.Sprintf("  Avg: %.2f\n", stat.Avg))
+			result.WriteString(fmt.Sprintf("  Median: %.2f\n", stat.Median))
+			result.WriteString(fmt.Sprintf("  90%% of values between: %.2f - %.2f\n", stat.Quantile01, stat.Quantile09))
+
+			// Add graph shortcut
+			result.WriteString(fmt.Sprintf("  /graph_%s\n\n", field))
+		}
+	}
+
+	// String Columns
+	if len(stringColumns) > 0 {
+		result.WriteString("📝 Text Columns:\n")
+		for _, field := range stringColumns {
+			stat := stats[field]
+			result.WriteString(fmt.Sprintf("• %s (%d unique values)\n", field[5:], stat.Uniq))
+
+			// Check if we have group data
+			if len(stat.Groups) > 0 {
+				// Find the most frequent value
+				maxCount := int64(0)
+				var maxValue string
+				for _, group := range stat.Groups {
+					columnName := ""
+					for columnName, _ = range group {
+						if columnName != "count()" {
+							break
+						}
+					}
+					if count, ok := group["count()"].(int64); ok {
+						if count > maxCount {
+							maxCount = count
+							maxValue = fmt.Sprintf("%v", group[columnName])
+						}
+					}
+				}
+				if maxValue != "" {
+					result.WriteString(fmt.Sprintf("  Most frequent: \"%s\" (%d times)\n", maxValue, maxCount))
+				}
+				result.WriteString(fmt.Sprintf("  /details_%s\n", field[5:]))
+			}
+
+			// Check if it's a date column
+			if len(stat.Dates) > 0 {
+				result.WriteString("  (detected as date)\n")
+			}
+			result.WriteString("\n")
+		}
+	}
+
+	return result.String()
+}
+
 func GenerateTable(stats map[string]CommonStat) string {
 	// Create a new table with a Key column and columns for each field in the CommonStat struct
 	t := table.NewWriter()

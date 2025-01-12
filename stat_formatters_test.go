@@ -2,12 +2,66 @@ package main
 
 import (
 	"encoding/csv"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 	"time"
 )
 
+func TestGenerateCommonInfoMsg(t *testing.T) {
+	// Create test data
+	stats := map[string]CommonStat{
+		"all": {
+			Count: 1000,
+		},
+		"age": {
+			IsNumeric:  true,
+			Avg:        35.5,
+			Median:     34.0,
+			Quantile01: 18.0,
+			Quantile09: 65.0,
+			Groups: []map[string]interface{}{
+				{
+					"value": 25,
+					"count": 150,
+				},
+			},
+		},
+		"salary": {
+			IsNumeric:  true,
+			Avg:        75000.0,
+			Median:     70000.0,
+			Quantile01: 45000.0,
+			Quantile09: 120000.0,
+		},
+		"name": {
+			IsNumeric: false,
+			Uniq:      450,
+			Groups: []map[string]interface{}{
+				{
+					"value": "John",
+					"count": 30,
+				},
+			},
+		},
+		"created_at": {
+			IsNumeric: false,
+			Uniq:      800,
+			Dates:     []map[string]interface{}{{}}, // Just need non-empty to indicate date
+		},
+	}
+
+	// Generate message
+	result := GenerateCommonInfoMsg(stats)
+
+	// Print the result
+	fmt.Println("Generated Message:")
+	fmt.Println("-------------------")
+	fmt.Println(result)
+	fmt.Println("-------------------")
+
+}
 func TestGenerateGroupsTables(t *testing.T) {
 	baseTime := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
 

@@ -23,6 +23,7 @@ import (
 
 var toDelete = map[string]time.Time{}
 var currentTable = map[int64]ClickhouseTableName{}
+var toDeleteTable = map[ClickhouseTableName]time.Time{}
 
 // telegram_handler.go
 
@@ -145,32 +146,66 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		}
 		currentTable[chatId] = table
 		stat := analyzeStatistics(table)
+		fmt.Println(stat)
 		sendStats(chatId, stat, bot)
+		toDeleteTable[table] = time.Now().Add(time.Hour)
 		//files with dates
 	}(filePath, message.Chat.ID)
 }
 
-func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
-	// Отправляем основную статистику
-	formattedText := GenerateTable(stat)
-	formattedTexts := GenerateGroupsTables(stat)
-	i := "<pre>\n" + formattedText + "\n</pre>"
-	if len(i) < 4096 {
-		msg := tgbotapi.NewMessage(chatId, i)
+// splitMessage splits a long message into parts at logical breaks
+func splitMessage(text string, maxLength int) []string {
+	if len(text) <= maxLength {
+		return []string{text}
+	}
 
-		msg.ParseMode = tgbotapi.ModeHTML
-		_, err := bot.Send(msg)
+	var messages []string
+	for len(text) > 0 {
+		splitIndex := maxLength
 
-		if err != nil {
-			return
+		if len(text) > maxLength {
+			// Look for double newline within last 1000 characters of max length
+			searchStart := maxLength - 1000
+			if searchStart < 0 {
+				searchStart = 0
+			}
+
+			// Search for double newline
+			lastBreak := strings.LastIndex(text[searchStart:maxLength], "\n\n")
+			if lastBreak != -1 {
+				splitIndex = searchStart + lastBreak
+			} else {
+				// If no double newline, look for single newline
+				lastBreak = strings.LastIndex(text[searchStart:maxLength], "\n")
+				if lastBreak != -1 {
+					splitIndex = searchStart + lastBreak
+				}
+			}
 		}
-	} else {
-		msg := tgbotapi.NewMessage(chatId, "Таблица слишком большая для вывода")
 
-		msg.ParseMode = tgbotapi.ModeHTML
+		// Extract the part
+		part := text[:splitIndex]
+		messages = append(messages, strings.TrimSpace(part))
+
+		// Move to next part
+		text = strings.TrimSpace(text[splitIndex:])
+	}
+
+	return messages
+}
+func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
+	formattedText := GenerateCommonInfoMsg(stat)
+
+	// Split long messages
+	const maxLength = 4000
+	messages := splitMessage(formattedText, maxLength)
+	fmt.Println(messages)
+	// Send each part of the main message
+	for _, msgText := range messages {
+		msg := tgbotapi.NewMessage(chatId, msgText)
 		_, err := bot.Send(msg)
-
 		if err != nil {
+			log.Printf("Error sending message: %v", err)
 			return
 		}
 	}
@@ -188,6 +223,7 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	}
 
 	// Отправляем статистику по группам
+	formattedTexts := GenerateGroupsTables(stat)
 	if len(formattedTexts) > 0 {
 		data = tgbotapi.FileBytes{
 			Name:  "stats_groups" + time.Now().Format("20060102-150405") + ".txt",

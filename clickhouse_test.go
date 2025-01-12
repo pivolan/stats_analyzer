@@ -1,9 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"github.com/pivolan/stats_analyzer/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"os"
 	"testing"
 )
@@ -24,6 +28,7 @@ func NewMockDB() *MockDB {
 // Переопределяем метод Exec
 func (m *MockDB) Exec(query string, values ...interface{}) *gorm.DB {
 	args := m.Called(query, values)
+	fmt.Println(query)
 	m.lastQuery = query // Store the last executed query
 	return args.Get(0).(*gorm.DB)
 }
@@ -98,14 +103,13 @@ Banana`,
 		},
 		{
 			name: "CSV numeric",
-			csvContent: `123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123
-1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235;1235
-123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123
-5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234;5234
-1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432;1432
-123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123;123
-23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454;23454
-23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23;23
+			csvContent: `Task1;Task2;Task0
+123;321;4235
+5234;234;3
+1432;342;123
+123;23423;532
+23454;123;234
+23;1675;124
 `,
 			expectedTable:   "column_1_column_2_column_3_123456",
 			expectedLastSQL: "INSERT INTO column_1_column_2_column_3_123456 FORMAT CSV \n1,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123\n2,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235,1235\n3,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123\n4,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234,5234\n5,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432,1432\n6,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123,123\n7,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454,23454\n8,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23,23\n",
@@ -261,4 +265,144 @@ func TestReplaceSpecialSymbols(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestSetZeroFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   CommonStat
+		source   CommonStat
+		expected CommonStat
+	}{
+		{
+			name: "Basic zero field replacement",
+			target: CommonStat{
+				Count: 0,
+				Uniq:  100,
+			},
+			source: CommonStat{
+				Count: 50,
+				Uniq:  200,
+			},
+			expected: CommonStat{
+				Count: 50,  // Should be replaced because target is zero
+				Uniq:  100, // Should not be replaced because target is non-zero
+			},
+		},
+		{
+			name: "All numeric fields test",
+			target: CommonStat{
+				Count:      0,
+				Uniq:       0,
+				Avg:        0,
+				Min:        0,
+				Max:        0,
+				Median:     0,
+				Quantile01: 0,
+				Quantile09: 0,
+			},
+			source: CommonStat{
+				Count:      100,
+				Uniq:       200,
+				Avg:        50.5,
+				Min:        10.0,
+				Max:        90.0,
+				Median:     45.5,
+				Quantile01: 15.0,
+				Quantile09: 85.0,
+			},
+			expected: CommonStat{
+				Count:      100,
+				Uniq:       200,
+				Avg:        50.5,
+				Min:        10.0,
+				Max:        90.0,
+				Median:     45.5,
+				Quantile01: 15.0,
+				Quantile09: 85.0,
+			},
+		},
+		{
+			name: "Mixed zero and non-zero fields",
+			target: CommonStat{
+				Count:     100,
+				Uniq:      0,
+				Avg:       25.5,
+				Min:       0,
+				Max:       75.0,
+				Median:    0,
+				IsNumeric: true,
+			},
+			source: CommonStat{
+				Count:     200,
+				Uniq:      150,
+				Avg:       30.0,
+				Min:       10.0,
+				Max:       80.0,
+				Median:    35.5,
+				IsNumeric: false,
+			},
+			expected: CommonStat{
+				Count:     100,  // Not replaced because target is non-zero
+				Uniq:      150,  // Replaced because target is zero
+				Avg:       25.5, // Not replaced because target is non-zero
+				Min:       10.0, // Replaced because target is zero
+				Max:       75.0, // Not replaced because target is non-zero
+				Median:    35.5, // Replaced because target is zero
+				IsNumeric: true, // Boolean fields are not affected by setZeroFields
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := tt.target
+			setZeroFields(&target, tt.source)
+
+			// Check Count
+			if target.Count != tt.expected.Count {
+				t.Errorf("Count = %v, want %v", target.Count, tt.expected.Count)
+			}
+
+			// Check Uniq
+			if target.Uniq != tt.expected.Uniq {
+				t.Errorf("Uniq = %v, want %v", target.Uniq, tt.expected.Uniq)
+			}
+
+			// Check Avg
+			if target.Avg != tt.expected.Avg {
+				t.Errorf("Avg = %v, want %v", target.Avg, tt.expected.Avg)
+			}
+
+			// Check Min
+			if target.Min != tt.expected.Min {
+				t.Errorf("Min = %v, want %v", target.Min, tt.expected.Min)
+			}
+
+			// Check Max
+			if target.Max != tt.expected.Max {
+				t.Errorf("Max = %v, want %v", target.Max, tt.expected.Max)
+			}
+
+			// Check Median
+			if target.Median != tt.expected.Median {
+				t.Errorf("Median = %v, want %v", target.Median, tt.expected.Median)
+			}
+
+			// Check IsNumeric (though it's not affected by setZeroFields)
+			if target.IsNumeric != tt.expected.IsNumeric {
+				t.Errorf("IsNumeric = %v, want %v", target.IsNumeric, tt.expected.IsNumeric)
+			}
+		})
+	}
+}
+
+func TestImportDataIntoClickHouseEnv(t *testing.T) {
+	cfg := config.GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	assert.NoError(t, err)
+
+	table, err := importDataIntoClickHouse("/Users/igorpecenikin/Downloads/test8.csv", db)
+	assert.NoError(t, err)
+	fmt.Println(table)
 }

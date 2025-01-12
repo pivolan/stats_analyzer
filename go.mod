@@ -6,6 +6,7 @@ require (
 	github.com/go-telegram-bot-api/telegram-bot-api v4.6.4+incompatible
 	github.com/jedib0t/go-pretty/v6 v6.4.6
 	github.com/joho/godotenv v1.5.1
+	github.com/mozillazg/go-unidecode v0.2.0
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/pivolan/go_utils v0.0.0-20210616084449-aa9aaf224fca
 	github.com/satori/go.uuid v1.2.0

@@ -6,7 +6,10 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
+	"github.com/mozillazg/go-unidecode"
+	"github.com/pivolan/go_utils"
 	uuid "github.com/satori/go.uuid"
+	"gorm.io/gorm"
 	"io"
 	"log"
 	"os"
@@ -15,9 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/pivolan/go_utils"
-	"gorm.io/gorm"
 )
 
 type DBInterface interface {
@@ -26,7 +26,7 @@ type DBInterface interface {
 type ClickhouseTableName string
 
 var getMD5String = func(input string) string {
-	prefix := uuid.NewV1().String()[:6]
+	prefix := uuid.NewV4().String()[:6]
 	hasher := md5.New()
 	hasher.Write([]byte(input))
 	hashBytes := hasher.Sum(nil)
@@ -42,7 +42,9 @@ func SearchStrings(a []string, x string) int {
 	}
 	return -1
 }
+
 func replaceSpecialSymbols(input string) string {
+	input = unidecode.Unidecode(input)
 	// Replace all non-alphanumeric characters with underscores
 	re := regexp.MustCompile("[^a-zA-Z0-9]+")
 	processedString := re.ReplaceAllString(input, "_")
@@ -104,6 +106,67 @@ func detectDelimiter(filePath string) (rune, error) {
 
 	return bestDelimiter, nil
 }
+
+func addNumberPrefix(headers []string) []string {
+	result := make([]string, len(headers))
+	for i, header := range headers {
+		// Форматируем номер с ведущими нулями до 4 цифр
+		result[i] = fmt.Sprintf("%04d_%s", i+1, header)
+	}
+	return result
+}
+func tryParseDateTime(value string) (time.Time, string, string, error) {
+	var dateFormats = []string{
+		"2006-01-02 15:04:05.999999",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05.999999Z",
+		"2006-01-02T15:04:05Z",
+		"2006/01/02 15:04:05",
+		"02-01-2006 15:04:05",
+		"02/01/2006 15:04:05",
+		"02.01.2006 15:04:05",
+		"2006.01.02 15:04:05",
+		"2006-01-02",
+		"02-01-2006",
+		"02/01/2006",
+		"02.01.2006",
+		"2006.01.02",
+		"2006/01/02",
+		"20060102150405",
+		"20060102",
+	}
+	// Trim any whitespace and handle empty strings
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, "", "", fmt.Errorf("ErrUnknownDateFormat")
+	}
+
+	// Try each format
+	for _, format := range dateFormats {
+		if t, err := time.Parse(format, value); err == nil {
+			var standardFormat string
+			if strings.Contains(format, ":05.") {
+				// Has microseconds
+				standardFormat = "2006-01-02 15:04:05.999999"
+			} else {
+				// No microseconds
+				standardFormat = "2006-01-02 15:04:05"
+			}
+			// Format the time using the standard format
+			formattedStr := t.Format(standardFormat)
+			return t, standardFormat, formattedStr, nil
+		}
+	}
+
+	return time.Time{}, "", "", fmt.Errorf("ErrUnknownDateFormat")
+}
+func removeBOM(row []string) []string {
+	if len(row) > 0 {
+		row[0] = strings.TrimPrefix(row[0], "\uFEFF")
+	}
+	return row
+}
+
 func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableName, error) {
 	delimiter, err := detectDelimiter(filePath)
 	if err != nil {
@@ -126,11 +189,10 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 	r.TrimLeadingSpace = true // Убираем начальные пробелы
 	// Читаем и анализируем первую строку
 	firstRow, err := r.Read()
-
 	if err != nil {
 		return "", err
 	}
-
+	firstRow = removeBOM(firstRow)
 	// Анализируем заголовки
 	headerAnalysis := AnalyzeHeaders(firstRow)
 	if headerAnalysis == nil {
@@ -139,7 +201,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 
 	// Проверяем и валидируем заголовки
 	headers := ValidateHeaders(headerAnalysis.Headers)
-
+	headers = addNumberPrefix(headers)
 	// Получаем первую строку данных
 	var dataRow []string
 	if headerAnalysis.FirstRowIsData {
@@ -149,6 +211,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 		if err != nil {
 			return "", err
 		}
+		dataRow = removeBOM(dataRow)
 	}
 
 	// Определяем типы данных
@@ -170,6 +233,9 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 		}
 
 		for n, value := range values {
+			// Remove UTF-8 BOM (Byte Order Mark) if present. BOM is a sequence of bytes (0xEF,0xBB,0xBF)
+			// that some text editors (especially on Windows) add at the beginning of UTF-8 files
+			value = strings.TrimPrefix(value, "\uFEFF")
 			f := ""
 			var v interface{}
 			v, err = time.Parse("2006-01-02 15:04:05.999999", value)
@@ -177,7 +243,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 				f = "DateTime"
 			}
 			if err != nil {
-				v, err = time.Parse("2006-01-02 15:04:05", value)
+				_, _, v, err = tryParseDateTime(value)
 				if err == nil {
 					f = "DateTime"
 				}
@@ -257,6 +323,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 	if tx.Error != nil {
 		return "", tx.Error
 	}
+	fmt.Println("create table", sql)
 	tx = db.Exec(sql)
 	if tx.Error != nil {
 		return "", tx.Error
@@ -280,6 +347,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 		if err != nil {
 			break
 		}
+		values = removeBOM(values)
 		for k, v := range values {
 			if types[k] == "String" || types[k] == "Date" || types[k] == "DateTime" {
 				values[k] = "'" + v + "'"
@@ -375,6 +443,7 @@ type CommonStat struct {
 	Avg, Min, Max, Median, Quantile001, Quantile01, Quantile099, Quantile09 float64
 	Dates                                                                   []map[string]interface{}
 	Groups                                                                  []map[string]interface{}
+	IsNumeric                                                               bool
 }
 
 func (c *CommonStat) Set(key string, value interface{}) error {
@@ -470,7 +539,9 @@ func parseNumericResults(param map[string]interface{}) (result map[string]Common
 		}
 		stat := result[field]
 		stat.Set(method, value)
+		stat.IsNumeric = true
 		result[field] = stat
+		fmt.Println("is numeric", result[field])
 	}
 	return
 }
@@ -478,15 +549,12 @@ func mergeStat(results ...map[string]CommonStat) (response map[string]CommonStat
 	response = map[string]CommonStat{}
 	for _, result := range results {
 		for field, values := range result {
-
-			{
-				if _, ok := response[field]; !ok {
-					response[field] = CommonStat{}
-				}
-				stat := response[field]
-				setZeroFields(&stat, values)
-				response[field] = stat
+			if _, ok := response[field]; !ok {
+				response[field] = CommonStat{}
 			}
+			stat := response[field]
+			setZeroFields(&stat, values)
+			response[field] = stat
 		}
 	}
 	return
@@ -513,6 +581,13 @@ func setZeroFields(a *CommonStat, b CommonStat) {
 					fieldValue.SetInt(bFieldValue.Int())
 				}
 			}
+		case reflect.Bool:
+			// Get corresponding field in struct b using reflection
+			bFieldValue := reflect.ValueOf(&b).Elem().FieldByName(field.Name)
+			if bFieldValue.Bool() {
+				fieldValue.SetBool(true)
+			}
+
 		case reflect.Float64:
 			if fieldValue.Float() == 0 {
 				// Get corresponding field in struct b using reflection
@@ -546,7 +621,7 @@ func generateSqlForCount(columns []ColumnInfo, table ClickhouseTableName) (sql s
 }
 
 func generateSqlForNumericColumnsStats(columns []ColumnInfo, table ClickhouseTableName) (sql string) {
-	statMethods := []string{"quantile(0.01)", "quantile(0.99)", "median", "avg", "max", "min"}
+	statMethods := []string{"quantile(0.01)", "quantile(0.99)", "quantile(0.1)", "quantile(0.9)", "median", "avg", "max", "min"}
 	fields := columnAggregatesSelectSqlGenerator(columns, statMethods)
 	return "SELECT " + strings.Join(fields, ",") + " FROM " + string(table)
 }

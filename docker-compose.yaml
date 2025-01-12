@@ -5,5 +5,5 @@ services:
     image: yandex/clickhouse-server
     restart: always
     ports:
-      - "9000:9004"
+      - "9004:9004"
       - "8120:8123"

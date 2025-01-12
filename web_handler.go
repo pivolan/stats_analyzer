@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +62,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 			currentTable[chatId] = table
 			stat := analyzeStatistics(table)
 			sendStats(chatId, stat, bot)
+			toDeleteTable[table] = time.Now().Add(time.Hour)
 		}
 	}(uuid, filePath)
 
