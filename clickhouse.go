@@ -368,12 +368,21 @@ func RemoveSpecialChars(s string) string {
 	return buf.String()
 }
 
+type StatType string
+
+const (
+	TypeString StatType = "string"
+	TypeDate   StatType = "date"
+	TypeNumber StatType = "number"
+)
+
 type CommonStat struct {
 	Count                                                                   int64
 	Uniq                                                                    int64
 	Avg, Min, Max, Median, Quantile001, Quantile01, Quantile099, Quantile09 float64
 	Dates                                                                   []map[string]interface{}
 	Groups                                                                  []map[string]interface{}
+	Type                                                                    StatType
 }
 
 func (c *CommonStat) Set(key string, value interface{}) error {

@@ -50,12 +50,12 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 		bot.Send(msg)
 	}
 
-	go func() {
+	go func(uuid string, filePath string) {
 		stat := handleFile(filePath)
 		if chatId, ok := users[uuid]; ok {
 			sendStats(chatId, stat, bot)
 		}
-	}()
+	}(uuid, filePath)
 
 	fmt.Fprintf(w, "File uploaded successfully")
 }
