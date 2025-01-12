@@ -24,13 +24,19 @@ func GenerateTable(stats map[string]CommonStat) string {
 	fields := table.Row{"FieldName"}
 	for i := 0; i < t1.NumField(); i++ {
 		field := t1.Field(i)
-		fmt.Println(field.Name)
 		fields = append(fields, field.Name)
 	}
 	t.AppendHeader(fields)
 
-	// Loop over each key in the map and add a row to the table
-	for k, v := range stats {
+	var keys []string
+	for k := range stats {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Now use sorted keys to process values
+	for _, k := range keys {
+		v := stats[k]
 		values := make([]interface{}, len(fields))
 		values[0] = k
 

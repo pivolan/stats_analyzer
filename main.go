@@ -18,6 +18,8 @@ import (
 
 // DfgjertGoddmERhU59 click
 // 7975342417:AAHusII9MKeJb9OeVscUnZnvMnVwC7wDE0U tg
+
+// this variable is used for assoc between upload file link and message.chat.id telegram, to send stats in chat
 var users = map[string]int64{}
 var bot *tgbotapi.BotAPI
 

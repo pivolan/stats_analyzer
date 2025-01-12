@@ -23,6 +23,7 @@ import (
 type DBInterface interface {
 	Exec(query string, values ...interface{}) *gorm.DB
 }
+type ClickhouseTableName string
 
 var getMD5String = func(input string) string {
 	prefix := uuid.NewV1().String()[:6]
@@ -103,7 +104,7 @@ func detectDelimiter(filePath string) (rune, error) {
 
 	return bestDelimiter, nil
 }
-func importDataIntoClickHouse(filePath string, db DBInterface) (string, error) {
+func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableName, error) {
 	delimiter, err := detectDelimiter(filePath)
 	if err != nil {
 		log.Println(fmt.Errorf("error detecting delimiter: %v", err))
@@ -311,7 +312,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (string, error) {
 		}
 	}
 
-	return tableName, nil
+	return ClickhouseTableName(tableName), nil
 }
 
 // Вспомогательная функция для определения минимального значения
@@ -327,7 +328,7 @@ type ColumnInfo struct {
 	Type string //Date DateTime64 Int64 Float64
 }
 
-func getColumnAndTypeList(db *gorm.DB, tableName string) ([]ColumnInfo, error) {
+func getColumnAndTypeList(db *gorm.DB, tableName ClickhouseTableName) ([]ColumnInfo, error) {
 	query := fmt.Sprintf("DESCRIBE TABLE %s", tableName)
 	tx := db.Raw(query)
 	if tx.Error != nil {
@@ -368,21 +369,12 @@ func RemoveSpecialChars(s string) string {
 	return buf.String()
 }
 
-type StatType string
-
-const (
-	TypeString StatType = "string"
-	TypeDate   StatType = "date"
-	TypeNumber StatType = "number"
-)
-
 type CommonStat struct {
 	Count                                                                   int64
 	Uniq                                                                    int64
 	Avg, Min, Max, Median, Quantile001, Quantile01, Quantile099, Quantile09 float64
 	Dates                                                                   []map[string]interface{}
 	Groups                                                                  []map[string]interface{}
-	Type                                                                    StatType
 }
 
 func (c *CommonStat) Set(key string, value interface{}) error {
@@ -538,7 +530,7 @@ func setZeroFields(a *CommonStat, b CommonStat) {
 func excludeColumn(name string) bool {
 	return go_utils.InArray(name, []string{"id", "slug"})
 }
-func generateSqlForUniqCounts(columns []ColumnInfo, table string) (sql string) {
+func generateSqlForUniqCounts(columns []ColumnInfo, table ClickhouseTableName) (sql string) {
 	fields := []string{}
 	method := "uniq"
 	for _, column := range columns {
@@ -547,16 +539,16 @@ func generateSqlForUniqCounts(columns []ColumnInfo, table string) (sql string) {
 		}
 		fields = append(fields, fmt.Sprintf("%s(%s) as %s", method, column.Name, column.Name))
 	}
-	return "SELECT " + strings.Join(fields, ",") + " FROM " + table
+	return "SELECT " + strings.Join(fields, ",") + " FROM " + string(table)
 }
-func generateSqlForCount(columns []ColumnInfo, table string) (sql string) {
-	return "SELECT count() FROM " + table
+func generateSqlForCount(columns []ColumnInfo, table ClickhouseTableName) (sql string) {
+	return "SELECT count() FROM " + string(table)
 }
 
-func generateSqlForNumericColumnsStats(columns []ColumnInfo, table string) (sql string) {
+func generateSqlForNumericColumnsStats(columns []ColumnInfo, table ClickhouseTableName) (sql string) {
 	statMethods := []string{"quantile(0.01)", "quantile(0.99)", "median", "avg", "max", "min"}
 	fields := columnAggregatesSelectSqlGenerator(columns, statMethods)
-	return "SELECT " + strings.Join(fields, ",") + " FROM " + table
+	return "SELECT " + strings.Join(fields, ",") + " FROM " + string(table)
 }
 func columnAggregatesSelectSqlGenerator(columns []ColumnInfo, aggregatesMethods []string) []string {
 	statMethods := aggregatesMethods

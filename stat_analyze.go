@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func analyzeStatistics(tableName string) map[string]CommonStat {
+func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
 	cfg := config.GetConfig()
 	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -70,17 +70,17 @@ func analyzeStatistics(tableName string) map[string]CommonStat {
 	return r
 }
 
-func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonStat, table string) []string {
+func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonStat, table ClickhouseTableName) []string {
 	sqls := []string{}
 	groupedColumns := []string{}
 	for _, columnInfo := range columnInfos {
 		if columnInfo.Type == "String" || columnInfo.Type == "Nullable(String)" {
 			if uniqInfo, ok := uniqInfos[columnInfo.Name]; ok {
 				if uniqInfo.Uniq > 1 && uniqInfo.Uniq < 1000 {
-					sql1 := "SELECT count(*), " + columnInfo.Name + " FROM " + table + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) DESC LIMIT 100"
+					sql1 := "SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) DESC LIMIT 100"
 					sqls = append(sqls, sql1)
 					if uniqInfo.Uniq > 100 {
-						sql2 := "SELECT count(*), " + columnInfo.Name + " FROM " + table + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) LIMIT 100"
+						sql2 := "SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) LIMIT 100"
 						sqls = append(sqls, sql2)
 					}
 					groupedColumns = append(groupedColumns, columnInfo.Name)
@@ -89,15 +89,15 @@ func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonS
 		}
 	}
 	if len(groupedColumns) > 0 {
-		sql1 := "SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + table + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
-		sql2 := "SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + table + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
+		sql1 := "SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
+		sql2 := "SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
 		sqls = append(sqls, sql1, sql2)
 	}
 	return sqls
 }
 
 // method will find all date fields and generate sql for group by them
-func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table string) map[string]string {
+func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table ClickhouseTableName) map[string]string {
 	sqls := map[string]string{}
 	for _, columnInfo := range columnsInfo {
 		truncateDatesList := []string{"year", "month", "day"}
@@ -109,7 +109,7 @@ func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table string) map[stri
 
 			for _, truncDate := range truncateDatesList {
 				sql := "SELECT toString(date_trunc('" + truncDate + "', " + columnInfo.Name + ")) as datetime, count(*) as cnt, 'info' as common, " + strings.Join(fields, ",") +
-					" FROM " + table + " GROUP BY datetime ORDER BY 1 DESC"
+					" FROM " + string(table) + " GROUP BY datetime ORDER BY 1 DESC"
 				sqls[fmt.Sprintf("%s_%s", columnInfo.Name, truncDate)] = sql
 			}
 		}

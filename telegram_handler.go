@@ -22,6 +22,7 @@ import (
 )
 
 var toDelete = map[string]time.Time{}
+var currentTable = map[int64]ClickhouseTableName{}
 
 // telegram_handler.go
 
@@ -136,7 +137,14 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 
 	// Unpack archive if necessary
 	go func(filePath string, chatId int64) {
-		stat := handleFile(filePath)
+		table, err := handleFile(filePath)
+		if err != nil {
+			msg := tgbotapi.NewMessage(chatId, "Some error on processing file:"+err.Error())
+			bot.Send(msg)
+			return
+		}
+		currentTable[chatId] = table
+		stat := analyzeStatistics(table)
 		sendStats(chatId, stat, bot)
 		//files with dates
 	}(filePath, message.Chat.ID)
@@ -295,12 +303,12 @@ func marshalJSON(v interface{}) string {
 	}
 	return string(b)
 }
-func handleFile(filePath string) map[string]CommonStat {
+func handleFile(filePath string) (ClickhouseTableName, error) {
 	// Unpack archive if necessary
 	unpackedFilePath, err := unpackArchive(filePath)
 	if err != nil {
 		log.Printf("Error unpacking file: %v", err)
-		return nil
+		return "", fmt.Errorf("handleFile>unpackArchive err: %s", err)
 	}
 	if unpackedFilePath != "" {
 		filePath = unpackedFilePath
@@ -312,16 +320,16 @@ func handleFile(filePath string) map[string]CommonStat {
 	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Println("error on connect to clickhouse", err)
-		return nil
+		return "", fmt.Errorf("handleFile>gorm.Open err: %s", err)
 	}
 
 	tableName, err := importDataIntoClickHouse(filePath, db)
 	if err != nil {
 		log.Printf("Error importing data into ClickHouse: %v", err)
-		return nil
+		return "", fmt.Errorf("handleFile>importDataIntoClickHouse err: %s", err)
 	}
 	fmt.Print(tableName)
-	return analyzeStatistics(tableName)
+	return tableName, nil
 }
 
 func generateTimeSeriesSVG(data []map[string]interface{}, title string) string {

@@ -51,8 +51,15 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func(uuid string, filePath string) {
-		stat := handleFile(filePath)
+		table, err := handleFile(filePath)
 		if chatId, ok := users[uuid]; ok {
+			if err != nil {
+				msg := tgbotapi.NewMessage(chatId, "Some error on processing file:"+err.Error())
+				bot.Send(msg)
+				return
+			}
+			currentTable[chatId] = table
+			stat := analyzeStatistics(table)
 			sendStats(chatId, stat, bot)
 		}
 	}(uuid, filePath)

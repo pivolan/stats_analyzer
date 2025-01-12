@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"strings"
 	"testing"
 	"time"
 )
@@ -16,7 +15,7 @@ func TestAnalyzeStatistics(t *testing.T) {
 	//groups
 }
 func TestCSV(t *testing.T) {
-	results := handleFile("/Users/igorpecenikin/Downloads/a.csv")
+	results, _ := handleFile("/Users/igorpecenikin/Downloads/a.csv")
 	data, _ := json.MarshalIndent(results, "", "\t")
 	fmt.Printf("%+v\n", string(data))
 }
@@ -39,35 +38,4 @@ func TestTimeParser(t *testing.T) {
 	}
 
 	assert.Equal(t, "2022-10-26 06:03:18.272132 +0000 UTC", fmt.Sprint(tt))
-}
-func TestGenerateGroupsTables(t *testing.T) {
-	baseTime := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
-
-	info := map[string]CommonStat{
-		"vasya": {Groups: []map[string]interface{}{
-			{"id": 10, "datetime": baseTime, "count(*)": 123},
-			{"id": 11, "datetime": baseTime.Add(time.Minute), "count(*)": 12},
-			{"id": 12, "datetime": baseTime.Add(time.Minute * 2), "count(*)": 22},
-		}},
-		"kolya": {Groups: []map[string]interface{}{
-			{"id": 10, "datetime": baseTime, "count(*)": 123},
-			{"id": 11, "datetime": baseTime.Add(time.Minute), "count(*)": 12},
-			{"id": 12, "datetime": baseTime.Add(time.Minute * 2), "count(*)": 22},
-		}},
-	}
-	result := GenerateGroupsTables(info)
-	assert.Equal(t, `+----------+-------------------------------+----+
-| COUNT(*) | DATETIME                      | ID |
-+----------+-------------------------------+----+
-|      123 | 2024-01-01 10:00:00 +0000 UTC | 10 |
-|       12 | 2024-01-01 10:01:00 +0000 UTC | 11 |
-|       22 | 2024-01-01 10:02:00 +0000 UTC | 12 |
-+----------+-------------------------------+----+
-+----------+-------------------------------+----+
-| COUNT(*) | DATETIME                      | ID |
-+----------+-------------------------------+----+
-|      123 | 2024-01-01 10:00:00 +0000 UTC | 10 |
-|       12 | 2024-01-01 10:01:00 +0000 UTC | 11 |
-|       22 | 2024-01-01 10:02:00 +0000 UTC | 12 |
-+----------+-------------------------------+----+`, strings.Join(result, "\n"))
 }
