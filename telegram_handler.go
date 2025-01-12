@@ -219,12 +219,13 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	}
 
 	// Отправляем файлы с общей информацией
+	fileName := "stats" + time.Now().Format("20060102-150405") + ".txt"
 	data := tgbotapi.FileBytes{
-		Name:  "stats" + time.Now().Format("20060102-150405") + ".txt",
-		Bytes: []byte(formattedText),
+		Name:  fileName,
+		Bytes: []byte(fileName + "\n" + formattedText),
 	}
 	msg2 := tgbotapi.NewDocumentUpload(chatId, data)
-	msg2.Caption = "Общая статистика"
+	msg2.Caption = "Общая статистика: " + fileName
 	_, err := bot.Send(msg2)
 	if err != nil {
 		return
@@ -233,12 +234,13 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	// Отправляем статистику по группам
 	formattedTexts := GenerateGroupsTables(stat)
 	if len(formattedTexts) > 0 {
+		fileName := "stats_groups" + time.Now().Format("20060102-150405") + ".txt"
 		data = tgbotapi.FileBytes{
-			Name:  "stats_groups" + time.Now().Format("20060102-150405") + ".txt",
-			Bytes: []byte(strings.Join(formattedTexts, "\n")),
+			Name:  fileName,
+			Bytes: []byte(fileName + "\n" + strings.Join(formattedTexts, "\n")),
 		}
 		msg2 = tgbotapi.NewDocumentUpload(chatId, data)
-		msg2.Caption = "Статистика по группам"
+		msg2.Caption = "Статистика по группам: " + fileName
 		_, err = bot.Send(msg2)
 		if err != nil {
 			return
@@ -254,12 +256,13 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 		csvFiles := GenerateCSVByDates(stat)
 		zipData := ZipArchive(csvFiles)
 		if zipData != nil {
+			fileName := "time_series_data_" + time.Now().Format("20060102-150405") + ".zip"
 			zipFile := tgbotapi.FileBytes{
-				Name:  "time_series_data_" + time.Now().Format("20060102-150405") + ".zip",
+				Name:  fileName,
 				Bytes: zipData,
 			}
 			zipMsg := tgbotapi.NewDocumentUpload(chatId, zipFile)
-			zipMsg.Caption = "CSV файлы с группировкой по времени"
+			zipMsg.Caption = "CSV файлы с группировкой по времени: " + fileName
 			_, err = bot.Send(zipMsg)
 			if err != nil {
 				return
@@ -279,7 +282,7 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 				Bytes: []byte(svg1),
 			}
 			svg1Msg := tgbotapi.NewDocumentUpload(chatId, svg1File)
-			svg1Msg.Caption = "График 1: Временной ряд"
+			svg1Msg.Caption = "График 1: Временной ряд: " + svg1FileName
 			_, err = bot.Send(svg1Msg)
 			if err != nil {
 				return
@@ -307,7 +310,7 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 				Bytes: []byte(svg2),
 			}
 			svg2Msg := tgbotapi.NewDocumentUpload(chatId, svg2File)
-			svg2Msg.Caption = "График 2: Временной ряд"
+			svg2Msg.Caption = "График 2: Временной ряд: " + svg2FileName
 			_, err = bot.Send(svg2Msg)
 			if err != nil {
 				return

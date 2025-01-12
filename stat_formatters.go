@@ -20,7 +20,7 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 
 	// Total Records
 	if allStat, ok := stats["all"]; ok {
-		result.WriteString(fmt.Sprintf("📊 Total Records: %d\n\n", allStat.Count))
+		result.WriteString(fmt.Sprintf("📊 Total Lines: %d\n\n", allStat.Count))
 	}
 
 	// Collect numeric and string columns
@@ -60,15 +60,17 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 		result.WriteString("📝 Text Columns:\n")
 		for _, field := range stringColumns {
 			stat := stats[field]
-			result.WriteString(fmt.Sprintf("• %s (%d unique values)\n", field[5:], stat.Uniq))
+			if stat.Uniq > 0 {
+				result.WriteString(fmt.Sprintf("• %s (%d unique values); /details_%s\n", field[5:], stat.Uniq, field))
+			}
 
 			// Check if we have group data
 			if len(stat.Groups) > 0 {
 				// Find the most frequent value
 				maxCount := int64(0)
 				var maxValue string
+				columnName := ""
 				for _, group := range stat.Groups {
-					columnName := ""
 					for columnName, _ = range group {
 						if columnName != "count()" {
 							break
@@ -82,9 +84,8 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 					}
 				}
 				if maxValue != "" {
-					result.WriteString(fmt.Sprintf("  Most frequent: \"%s\" (%d times)\n", maxValue, maxCount))
+					result.WriteString(fmt.Sprintf("• %s\n  Most frequent: %s (%d times)\n", columnName[5:], maxValue, maxCount))
 				}
-				result.WriteString(fmt.Sprintf("  /details_%s\n", field[5:]))
 			}
 
 			// Check if it's a date column
@@ -155,7 +156,13 @@ func GenerateGroupsTables(stats map[string]CommonStat) []string {
 	// Create a new table with a Key column and columns for each field in the CommonStat struct
 	result := []string{}
 	// Loop over each key in the map and add a row to the table
-	for _, v := range stats {
+	headers := []string{}
+	for header, _ := range stats {
+		headers = append(headers, header)
+	}
+	sort.Strings(headers)
+	for _, h := range headers {
+		v := stats[h]
 		t := table.NewWriter()
 
 		// Loop over the fields in the struct and print their names
@@ -190,6 +197,7 @@ func GenerateGroupsTables(stats map[string]CommonStat) []string {
 		// Add a new row to the table with the key and values from the CommonStat struct
 		t.SetStyle(table.StyleDefault)
 
+		result = append(result, v.Title)
 		result = append(result, t.Render())
 	}
 

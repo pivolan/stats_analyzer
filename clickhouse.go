@@ -444,6 +444,7 @@ type CommonStat struct {
 	Dates                                                                   []map[string]interface{}
 	Groups                                                                  []map[string]interface{}
 	IsNumeric                                                               bool
+	Title                                                                   string
 }
 
 func (c *CommonStat) Set(key string, value interface{}) error {

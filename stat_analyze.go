@@ -58,8 +58,11 @@ func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
 	}
 	//groups
 	sqls4 := generateSqlForGroups(columnsInfo, r1, tableName)
-	for i, sql := range sqls4 {
-		fmt.Println(sql)
+	for i, line := range sqls4 {
+		info := strings.Split(line, "//")
+		title := info[0]
+		sql := info[1]
+		fmt.Println(info)
 		dateAggregatesInfo := []map[string]interface{}{}
 
 		tx3 := db.Raw(sql)
@@ -67,7 +70,7 @@ func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
 		if t.Error != nil {
 			fmt.Println(t.Error)
 		}
-		groupsInfo := CommonStat{Groups: dateAggregatesInfo}
+		groupsInfo := CommonStat{Groups: dateAggregatesInfo, Title: title}
 		r[fmt.Sprintf("groups_info_%d", i)] = groupsInfo
 	}
 	return r
@@ -80,10 +83,10 @@ func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonS
 		if columnInfo.Type == "String" || columnInfo.Type == "Nullable(String)" {
 			if uniqInfo, ok := uniqInfos[columnInfo.Name]; ok {
 				if uniqInfo.Uniq > 1 && uniqInfo.Uniq < 1000 {
-					sql1 := "SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) DESC LIMIT 100"
+					sql1 := "Самые частые//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) DESC LIMIT 100"
 					sqls = append(sqls, sql1)
 					if uniqInfo.Uniq > 100 {
-						sql2 := "SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) LIMIT 100"
+						sql2 := "Редкие//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) LIMIT 100"
 						sqls = append(sqls, sql2)
 					}
 					groupedColumns = append(groupedColumns, columnInfo.Name)
@@ -91,9 +94,9 @@ func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonS
 			}
 		}
 	}
-	if len(groupedColumns) > 0 {
-		sql1 := "SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
-		sql2 := "SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
+	if len(groupedColumns) > 1 {
+		sql1 := "Группировка по всем колонкам самые частые варианты//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
+		sql2 := "Группировка по всем колонкам самые редкие//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
 		sqls = append(sqls, sql1, sql2)
 	}
 	return sqls
