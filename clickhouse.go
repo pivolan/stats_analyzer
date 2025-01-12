@@ -202,6 +202,9 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 	// Проверяем и валидируем заголовки
 	headers := ValidateHeaders(headerAnalysis.Headers)
 	headers = addNumberPrefix(headers)
+	if len(headers) > 50 {
+		return "", fmt.Errorf("Слишком мнго колонок, больше 50 это плохо")
+	}
 	// Получаем первую строку данных
 	var dataRow []string
 	if headerAnalysis.FirstRowIsData {

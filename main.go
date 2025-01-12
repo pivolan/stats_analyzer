@@ -103,6 +103,8 @@ func main() {
 
 		if update.Message.Document != nil {
 			go handleDocument(bot, update.Message)
+		} else if update.Message.Command() != "" {
+			go handleCommand(bot, update)
 		} else if update.Message.Text != "" {
 			go handleText(bot, update)
 		}
