@@ -40,6 +40,9 @@ func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
 	r3 := parseCountResults(countInfo)
 	r := mergeStat(r1, r2, r3)
 	//generate by date fields
+	if r3["all"].Count > 10000 {
+		return r
+	}
 	sqls3 := generateSqlForGroupByDates(columnsInfo, tableName)
 	for name, sql3 := range sqls3 {
 		fmt.Println(sql3)

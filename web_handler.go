@@ -53,6 +53,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	go func(uuid string, filePath string) {
 		table, err := handleFile(filePath)
+		fmt.Println("import finished", table)
 		if chatId, ok := users[uuid]; ok {
 			if err != nil {
 				msg := tgbotapi.NewMessage(chatId, "Some error on processing file:"+err.Error())

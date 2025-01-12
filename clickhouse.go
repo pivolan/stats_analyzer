@@ -360,7 +360,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 
 		csvWriter.Write(values)
 
-		if i%5000 == 0 {
+		if i%1000 == 0 {
 			csvWriter.Flush()
 			sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
 			b.Reset()

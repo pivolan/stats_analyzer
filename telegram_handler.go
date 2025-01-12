@@ -144,9 +144,10 @@ func handleDocument(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 			bot.Send(msg)
 			return
 		}
+		fmt.Println("import finished", table)
 		currentTable[chatId] = table
 		stat := analyzeStatistics(table)
-		fmt.Println(stat)
+		fmt.Println("analyze finished", stat)
 		sendStats(chatId, stat, bot)
 		toDeleteTable[table] = time.Now().Add(time.Hour)
 		//files with dates
@@ -160,39 +161,46 @@ func splitMessage(text string, maxLength int) []string {
 	}
 
 	var messages []string
-	for len(text) > 0 {
+	remainingText := text
+
+	for len(remainingText) > 0 {
+		// Calculate the actual split index based on remaining text length
 		splitIndex := maxLength
+		if len(remainingText) < maxLength {
+			splitIndex = len(remainingText)
+		}
 
-		if len(text) > maxLength {
-			// Look for double newline within last 1000 characters of max length
-			searchStart := maxLength - 1000
-			if searchStart < 0 {
-				searchStart = 0
-			}
+		searchStart := splitIndex - 1000
+		if searchStart < 0 {
+			searchStart = 0
+		}
 
-			// Search for double newline
-			lastBreak := strings.LastIndex(text[searchStart:maxLength], "\n\n")
-			if lastBreak != -1 {
-				splitIndex = searchStart + lastBreak
-			} else {
-				// If no double newline, look for single newline
-				lastBreak = strings.LastIndex(text[searchStart:maxLength], "\n")
-				if lastBreak != -1 {
-					splitIndex = searchStart + lastBreak
-				}
+		// Search for natural break points in the valid range
+		searchText := remainingText[:splitIndex]
+		lastDoubleBreak := strings.LastIndex(searchText[searchStart:], "\n\n")
+		if lastDoubleBreak != -1 {
+			splitIndex = searchStart + lastDoubleBreak
+		} else {
+			lastSingleBreak := strings.LastIndex(searchText[searchStart:], "\n")
+			if lastSingleBreak != -1 {
+				splitIndex = searchStart + lastSingleBreak
 			}
 		}
 
-		// Extract the part
-		part := text[:splitIndex]
+		// Extract the part and append to messages
+		part := remainingText[:splitIndex]
 		messages = append(messages, strings.TrimSpace(part))
 
-		// Move to next part
-		text = strings.TrimSpace(text[splitIndex:])
+		// Update remaining text
+		if splitIndex >= len(remainingText) {
+			break
+		}
+		remainingText = strings.TrimSpace(remainingText[splitIndex:])
 	}
 
 	return messages
 }
+
 func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	formattedText := GenerateCommonInfoMsg(stat)
 
