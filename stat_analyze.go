@@ -95,8 +95,8 @@ func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonS
 		}
 	}
 	if len(groupedColumns) > 1 {
-		sql1 := "9999_all_columns//Группировка по всем колонкам самые частые варианты//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
-		sql2 := "9999_all_columns//Группировка по всем колонкам самые редкие//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
+		sql1 := "9999_all_columns_frequently//Группировка по всем колонкам самые частые варианты//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
+		sql2 := "9999_all_columns_rarely//Группировка по всем колонкам самые редкие//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
 		sqls = append(sqls, sql1, sql2)
 	}
 	return sqls

@@ -119,7 +119,7 @@ def generate_daily_sales(date, product_info):
 
 # Генерация данных за текущий год
 current_year = datetime.now().year
-start_date = datetime(current_year, 1, 1)
+start_date = datetime(current_year-5, 1, 1)
 end_date = datetime(current_year, 12, 31)
 
 # Создание списка для хранения данных
@@ -132,7 +132,7 @@ while current_date <= end_date:
         sales_count, price = generate_daily_sales(current_date, product_info)
 
         # Генерируем указанное количество продаж на этот день
-        for _ in range(sales_count):
+        for _ in range(sales_count*10):
             # Генерация времени продажи
             sale_datetime = generate_datetime_for_day(current_date)
 
@@ -152,17 +152,18 @@ while current_date <= end_date:
             })
 
     current_date += timedelta(days=1)
-
+    print(current_date)
+print("date generated")
 # Создание DataFrame
 df = pd.DataFrame(sales_data)
-
+print("imported to panda")
 # Сортировка по дате и времени
-df = df.sort_values('datetime')
-
+#df = df.sort_values('datetime')
+print("sorted")
 # Сохранение в CSV
 filename = f'sales_data_{current_year}.csv'
 df.to_csv(filename, index=False)
-
+print("saved to csv")
 # Вывод примера данных и общей статистики
 print("\nПример данных:")
 print(df.head())

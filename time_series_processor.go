@@ -41,7 +41,7 @@ func analyzeTimeSeriesFiles(stats map[string]CommonStat) map[string]*TimeSeriesD
 		// Определяем временной диапазон
 		for i, row := range stat.Dates {
 			if dt, ok := row["datetime"].(string); ok {
-				date, err := time.Parse("2006-01-02 15:04:05", dt)
+				date, _, _, err := tryParseDateTime(dt)
 				if err == nil {
 					if i == 0 || date.Before(data.StartDate) {
 						data.StartDate = date
