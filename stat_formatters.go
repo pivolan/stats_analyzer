@@ -24,7 +24,7 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 	}
 
 	// Collect numeric and string columns
-	var numericColumns, stringColumns []string
+	var numericColumns, stringColumns, dateColumns []string
 	for field, stat := range stats {
 		if field == "all" {
 			continue
@@ -33,12 +33,15 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 			numericColumns = append(numericColumns, field)
 		} else if stat.Uniq > 0 || len(stat.Groups) > 0 {
 			stringColumns = append(stringColumns, field)
+		} else if len(stat.Dates) > 0 {
+			dateColumns = append(dateColumns, field)
 		}
 	}
 
 	// Sort columns alphabetically
 	sort.Strings(numericColumns)
 	sort.Strings(stringColumns)
+	sort.Strings(dateColumns)
 
 	// Numeric Columns
 	if len(numericColumns) > 0 {
@@ -84,7 +87,7 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 					}
 				}
 				if maxValue != "" {
-					result.WriteString(fmt.Sprintf("• %s\n  Most frequent: %s (%d times)\n", columnName[5:], maxValue, maxCount))
+					result.WriteString(fmt.Sprintf("  Most frequent: %s (%d times)\n", maxValue, maxCount))
 				}
 			}
 
@@ -95,7 +98,13 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 			result.WriteString("\n")
 		}
 	}
-
+	if len(dateColumns) > 0 {
+		result.WriteString("📝 Date Columns:\n")
+		for _, field := range dateColumns {
+			//stat := stats[field]
+			result.WriteString(fmt.Sprintf("• %s; /details_%s\n", field[11:], field))
+		}
+	}
 	return result.String()
 }
 

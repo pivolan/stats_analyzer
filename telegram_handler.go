@@ -408,8 +408,8 @@ func generateTimeSeriesSVG(data []map[string]interface{}, title string) string {
 	}
 
 	// Параметры графика
-	width, height := 800.0, 400.0
-	padding := struct{ top, right, bottom, left float64 }{50.0, 60.0, 70.0, 60.0}
+	width, height := 1000.0, 400.0
+	padding := struct{ top, right, bottom, left float64 }{50.0, 260.0, 70.0, 60.0}
 	chartWidth := width - padding.left - padding.right
 	chartHeight := height - padding.top - padding.bottom
 

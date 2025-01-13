@@ -40,9 +40,6 @@ func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
 	r3 := parseCountResults(countInfo)
 	r := mergeStat(r1, r2, r3)
 	//generate by date fields
-	if r3["all"].Count > 10000 {
-		return r
-	}
 	sqls3 := generateSqlForGroupByDates(columnsInfo, tableName)
 	for name, sql3 := range sqls3 {
 		fmt.Println(sql3)
@@ -58,10 +55,11 @@ func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
 	}
 	//groups
 	sqls4 := generateSqlForGroups(columnsInfo, r1, tableName)
-	for i, line := range sqls4 {
+	for _, line := range sqls4 {
 		info := strings.Split(line, "//")
-		title := info[0]
-		sql := info[1]
+		columnName := info[0]
+		title := info[1]
+		sql := info[2]
 		fmt.Println(info)
 		dateAggregatesInfo := []map[string]interface{}{}
 
@@ -70,8 +68,10 @@ func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
 		if t.Error != nil {
 			fmt.Println(t.Error)
 		}
-		groupsInfo := CommonStat{Groups: dateAggregatesInfo, Title: title}
-		r[fmt.Sprintf("groups_info_%d", i)] = groupsInfo
+		groupsInfo := r[columnName]
+		groupsInfo.Groups = dateAggregatesInfo
+		groupsInfo.Title = title
+		r[columnName] = groupsInfo
 	}
 	return r
 }
@@ -83,20 +83,20 @@ func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonS
 		if columnInfo.Type == "String" || columnInfo.Type == "Nullable(String)" {
 			if uniqInfo, ok := uniqInfos[columnInfo.Name]; ok {
 				if uniqInfo.Uniq > 1 && uniqInfo.Uniq < 1000 {
-					sql1 := "Самые частые//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) DESC LIMIT 100"
+					sql1 := columnInfo.Name + "//Самые частые//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) DESC LIMIT 100"
 					sqls = append(sqls, sql1)
-					if uniqInfo.Uniq > 100 {
-						sql2 := "Редкие//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) LIMIT 100"
-						sqls = append(sqls, sql2)
-					}
+					//if uniqInfo.Uniq > 100 {
+					//	sql2 := columnInfo.Name + "//Редкие//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) LIMIT 100"
+					//	sqls = append(sqls, sql2)
+					//}
 					groupedColumns = append(groupedColumns, columnInfo.Name)
 				}
 			}
 		}
 	}
 	if len(groupedColumns) > 1 {
-		sql1 := "Группировка по всем колонкам самые частые варианты//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
-		sql2 := "Группировка по всем колонкам самые редкие//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
+		sql1 := "9999_all_columns//Группировка по всем колонкам самые частые варианты//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
+		sql2 := "9999_all_columns//Группировка по всем колонкам самые редкие//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
 		sqls = append(sqls, sql1, sql2)
 	}
 	return sqls

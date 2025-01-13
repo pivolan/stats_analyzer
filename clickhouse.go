@@ -15,6 +15,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -117,6 +118,12 @@ func addNumberPrefix(headers []string) []string {
 }
 func tryParseDateTime(value string) (time.Time, string, string, error) {
 	var dateFormats = []string{
+		"2006-01-02",
+		"02-01-2006",
+		"02/01/2006",
+		"02.01.2006",
+		"2006.01.02",
+		"2006/01/02",
 		"2006-01-02 15:04:05.999999",
 		"2006-01-02 15:04:05",
 		"2006-01-02T15:04:05.999999Z",
@@ -126,40 +133,43 @@ func tryParseDateTime(value string) (time.Time, string, string, error) {
 		"02/01/2006 15:04:05",
 		"02.01.2006 15:04:05",
 		"2006.01.02 15:04:05",
-		"2006-01-02",
-		"02-01-2006",
-		"02/01/2006",
-		"02.01.2006",
-		"2006.01.02",
-		"2006/01/02",
-		"20060102150405",
-		"20060102",
 	}
 	// Trim any whitespace and handle empty strings
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return time.Time{}, "", "", fmt.Errorf("ErrUnknownDateFormat")
 	}
-
+	f := ""
 	// Try each format
 	for _, format := range dateFormats {
 		if t, err := time.Parse(format, value); err == nil {
 			var standardFormat string
-			if strings.Contains(format, ":05.") {
+
+			// Check if the format contains time components
+			hasTime := strings.Contains(format, "15:04")
+
+			if !hasTime {
+				// Date only format
+				standardFormat = "2006-01-02"
+				f = "Date"
+			} else if strings.Contains(format, ":05.") {
 				// Has microseconds
 				standardFormat = "2006-01-02 15:04:05.999999"
+				f = "DateTime64"
 			} else {
-				// No microseconds
+				// Has time but no microseconds
 				standardFormat = "2006-01-02 15:04:05"
+				f = "DateTime"
 			}
 			// Format the time using the standard format
 			formattedStr := t.Format(standardFormat)
-			return t, standardFormat, formattedStr, nil
+			return t, f, formattedStr, nil
 		}
 	}
 
 	return time.Time{}, "", "", fmt.Errorf("ErrUnknownDateFormat")
 }
+
 func removeBOM(row []string) []string {
 	if len(row) > 0 {
 		row[0] = strings.TrimPrefix(row[0], "\uFEFF")
@@ -246,21 +256,15 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 				f = "DateTime"
 			}
 			if err != nil {
-				_, _, v, err = tryParseDateTime(value)
-				if err == nil {
-					f = "DateTime"
-				}
+				v, f, _, err = tryParseDateTime(value)
 				if err != nil {
-					v, err = time.Parse("2006-01-02", value)
+					v, err = strconv.ParseUint(value, 10, 64)
 					if err != nil {
-						v, err = strconv.ParseUint(value, 10, 64)
+						v, err = strconv.ParseInt(value, 10, 64)
 						if err != nil {
-							v, err = strconv.ParseInt(value, 10, 64)
+							v, err = strconv.ParseFloat(value, 64)
 							if err != nil {
-								v, err = strconv.ParseFloat(value, 64)
-								if err != nil {
-									v = value
-								}
+								v = value
 							}
 						}
 					}
@@ -355,6 +359,12 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 			if types[k] == "String" || types[k] == "Date" || types[k] == "DateTime" {
 				values[k] = "'" + v + "'"
 			}
+			t, _, v, _ := tryParseDateTime(v)
+			if types[k] == "DateTime" {
+				values[k] = "'" + v + "'"
+			} else if types[k] == "Date" {
+				values[k] = "'" + t.Format("2006-01-02") + "'"
+			}
 		}
 
 		if !idExists {
@@ -408,6 +418,11 @@ func getColumnAndTypeList(db *gorm.DB, tableName ClickhouseTableName) ([]ColumnI
 
 	var columns []ColumnInfo
 	tx.Scan(&columns)
+
+	// Sort columns by Name
+	sort.Slice(columns, func(i, j int) bool {
+		return columns[i].Name < columns[j].Name
+	})
 
 	return columns, nil
 }
@@ -614,6 +629,9 @@ func generateSqlForUniqCounts(columns []ColumnInfo, table ClickhouseTableName) (
 	method := "uniq"
 	for _, column := range columns {
 		if excludeColumn(column.Name) {
+			continue
+		}
+		if strings.HasPrefix(column.Type, "Date") {
 			continue
 		}
 		fields = append(fields, fmt.Sprintf("%s(%s) as %s", method, column.Name, column.Name))
