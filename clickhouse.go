@@ -323,7 +323,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 			sql = `CREATE TABLE ` + tableName + ` (`
 		}
 	}
-	sql += strings.Join(fields, ",\n") + fmt.Sprintf(") ENGINE = ReplacingMergeTree PRIMARY KEY (id) SETTINGS index_granularity = 8192")
+	sql += strings.Join(fields, ",\n") + fmt.Sprintf(") ENGINE = MergeTree PRIMARY KEY (id) SETTINGS index_granularity = 8192")
 
 	// Создаем таблицу
 	tx := db.Exec("DROP TABLE IF EXISTS " + tableName)
@@ -373,7 +373,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 
 		csvWriter.Write(values)
 
-		if i%1000 == 0 {
+		if i%10000 == 0 {
 			csvWriter.Flush()
 			sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
 			b.Reset()

@@ -68,7 +68,7 @@ if __name__ == "__main__":
     import os
 
     # Укажите путь к вашему CSV файлу
-    file_path = "./sales_data_2025.csv"
+    file_path = "/Users/igorpecenikin/Downloads/Result_25.csv"
 
     # Получаем текущий процесс
     process = psutil.Process()
