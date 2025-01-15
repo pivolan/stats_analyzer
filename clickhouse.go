@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 	"io"
 	"log"
+	"math"
 	"os"
 	"reflect"
 	"regexp"
@@ -212,9 +213,9 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 	// Проверяем и валидируем заголовки
 	headers := ValidateHeaders(headerAnalysis.Headers)
 	headers = addNumberPrefix(headers)
-	if len(headers) > 50 {
-		return "", fmt.Errorf("Слишком мнго колонок, больше 50 это плохо")
-	}
+	//if len(headers) > 50 {
+	//	return "", fmt.Errorf("Слишком мнго колонок, больше 50 это плохо")
+	//}
 	// Получаем первую строку данных
 	var dataRow []string
 	if headerAnalysis.FirstRowIsData {
@@ -373,7 +374,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 
 		csvWriter.Write(values)
 
-		if i%10000 == 0 {
+		if i%(10000/int(math.Max(1.0, float64(len(headers))/50))) == 0 {
 			csvWriter.Flush()
 			sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
 			b.Reset()
