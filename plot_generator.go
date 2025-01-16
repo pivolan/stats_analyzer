@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 
 	"github.com/wcharczuk/go-chart/v2"
@@ -14,9 +15,11 @@ import (
 )
 
 func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error) {
+	var ticks []chart.Tick
 
 	var bars []chart.Value
 	maxVal := 0.0
+
 	for i := 0; i < len(xStart); i++ {
 		if yValues[i] > maxVal {
 			maxVal = yValues[i]
@@ -27,21 +30,57 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 
 		})
 	}
-
+	maxY := findMaxValue(yValues)
+	gridStep := calculateGridStep(maxY)
+	width, height := calculateChartDimensions(yValues, len(xStart), 60, 400)
+	for i := 0.0; i <= maxY; i += gridStep {
+		ticks = append(ticks, chart.Tick{
+			Value: i,
+			Label: fmt.Sprintf("%.1f", i),
+		})
+	}
 	// Настраиваем внешний вид графика
-	graph := chart.BarChart{
-		Title: "Distribution Histogram",
+	bar := chart.BarChart{
+		Title:      "",
+		TitleStyle: chart.Style{Hidden: true},
 		Background: chart.Style{
 
-			FillColor:   drawing.ColorWhite,
-			StrokeColor: drawing.ColorBlue,
-		},
-		Height:   1024,
-		Width:    2028,
+			Padding: chart.Box{
+				Top: 40,
+			}},
+		Height:   height,
+		Width:    width,
 		BarWidth: 30, // Уменьшаем ширину баров
 		Bars:     bars,
+		XAxis: chart.Style{
+			StrokeWidth: 2, // Толщина линии
+			StrokeColor: chart.ColorBlack,
+		},
 		YAxis: chart.YAxis{
 			Name: "Frequency",
+			Range: &chart.ContinuousRange{
+				Min: 0.0,
+				Max: maxY,
+			},
+
+			Style: chart.Style{
+
+				StrokeWidth: 2, // Толщина линии
+				StrokeColor: chart.ColorBlack,
+			},
+
+			Ticks: ticks,
+			GridMinorStyle: chart.Style{
+				StrokeColor: chart.ColorBlack,
+				StrokeWidth: 1,
+				DotWidth:    1,
+			},
+			GridMajorStyle: chart.Style{
+				StrokeColor:     chart.ColorBlack,
+				StrokeWidth:     1,
+				DotWidth:        1,
+				StrokeDashArray: []float64{5.0, 5.0}, // Пунктирная линия
+			},
 		},
 	}
 
@@ -49,7 +88,7 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 	buffer := bytes.NewBuffer([]byte{})
 
 	// Отрисовываем график в формате PNG
-	err := graph.Render(chart.PNG, buffer)
+	err := bar.Render(chart.PNG, buffer)
 	if err != nil {
 		return nil, fmt.Errorf("error rendering chart: %v", err)
 	}
@@ -153,8 +192,15 @@ func DrawPlot(xValues []float64, yValues []float64) ([]byte, error) {
 			TickStyle:      chart.Style{},
 			Ticks:          nil,
 			GridLines:      nil,
-			GridMajorStyle: chart.Style{},
-			GridMinorStyle: chart.Style{},
+			GridMajorStyle: chart.Style{
+				StrokeColor:     chart.ColorAlternateGray,
+				StrokeWidth:     1.0,
+				StrokeDashArray: []float64{5.0, 5.0}, // Пунктирная линия
+			},
+			GridMinorStyle: chart.Style{
+				StrokeColor: chart.ColorAlternateGray,
+				StrokeWidth: 0.5,
+			},
 		},
 		Background: chart.Style{
 			Padding: chart.Box{
@@ -288,4 +334,169 @@ func DrawDensityPlot(xValues []float64, yValues []float64) ([]byte, error) {
 	}
 
 	return buffer.Bytes(), nil
+}
+
+func DrawBarXString(x []string, y []float64) ([]byte, error) {
+	var bars chart.Values
+	var ticks []chart.Tick
+	width, Height := calculateChartDimensions(y, len(x), 60, 400)
+	maxValue := findMaxValue(y)
+	gridStep := calculateGridStep(maxValue)
+	maxY := math.Ceil(maxValue/gridStep) * gridStep
+	for i := 0.0; i <= maxY; i += gridStep {
+		ticks = append(ticks, chart.Tick{
+			Value: i,
+			Label: fmt.Sprintf("%.1f", i),
+		})
+	}
+	for i := range x {
+
+		bars = append(bars, chart.Value{
+			Label: x[i],
+			Value: y[i],
+		})
+
+	}
+
+	// Настраиваем внешний вид графика
+	bar := chart.BarChart{
+		Title:      "Histogram String Value",
+		TitleStyle: chart.Style{Hidden: true},
+		Background: chart.Style{
+
+			Padding: chart.Box{
+				Top: 40,
+			}},
+		Height:   Height,
+		Width:    width,
+		BarWidth: 30, // Уменьшаем ширину баров
+		Bars:     bars,
+		XAxis: chart.Style{
+			StrokeWidth: 2, // Толщина линии
+			StrokeColor: chart.ColorBlack,
+		},
+		YAxis: chart.YAxis{
+			Name: "Frequency",
+			Range: &chart.ContinuousRange{
+				Min: 0.0,
+				Max: maxY,
+			},
+
+			Style: chart.Style{
+
+				StrokeWidth: 2, // Толщина линии
+				StrokeColor: chart.ColorBlack,
+			},
+
+			Ticks: ticks,
+			GridMinorStyle: chart.Style{
+				StrokeColor: chart.ColorBlack,
+				StrokeWidth: 1,
+				DotWidth:    1,
+			},
+			GridMajorStyle: chart.Style{
+				StrokeColor:     chart.ColorBlack,
+				StrokeWidth:     1,
+				DotWidth:        1,
+				StrokeDashArray: []float64{5.0, 5.0}, // Пунктирная линия
+
+			},
+		},
+	}
+
+	// Создаем буфер для записи изображения
+	buffer := bytes.NewBuffer([]byte{})
+
+	// Отрисовываем график в формате PNG
+	err := bar.Render(chart.PNG, buffer)
+	if err != nil {
+		return nil, fmt.Errorf(" error rendering chart: %v", err)
+	}
+
+	return buffer.Bytes(), nil
+
+}
+func GenerateHistogramForString(db *gorm.DB, tableName ClickhouseTableName, columnName string) ([]byte, error) {
+	// SQL для получения категориальных данных с подсчетом
+	categoricalSQL := fmt.Sprintf(`
+    SELECT %[1]s as category, 
+           COUNT(*) as count
+    FROM %[2]s
+    WHERE %[1]s IS NOT NULL AND %[1]s != ''
+    GROUP BY %[1]s
+    ORDER BY count DESC
+    LIMIT 20
+`, columnName, tableName)
+
+	type CategoryCount struct {
+		Category string
+		Count    int64
+	}
+
+	var categoryCounts []CategoryCount
+	if err := db.Raw(categoricalSQL).Scan(&categoryCounts).Error; err != nil {
+		return nil, fmt.Errorf("error getting category counts: %v", err)
+	}
+
+	// Подготовка данных для графика
+	categories := make([]string, len(categoryCounts))
+	counts := make([]float64, len(categoryCounts))
+	maxCount := float64(0)
+
+	for i, cc := range categoryCounts {
+		categories[i] = cc.Category
+		counts[i] = float64(cc.Count)
+		if counts[i] > maxCount {
+			maxCount = counts[i]
+		}
+	}
+
+	return DrawBarXString(categories, counts)
+}
+
+func calculateGridStep(maxValue float64) float64 {
+	// Находим порядок величины максимального значения
+	magnitude := math.Pow(10, math.Floor(math.Log10(maxValue)))
+
+	normalized := maxValue / magnitude
+
+	// Выбираем базовый шаг в зависимости от нормализованного значения
+	var step float64
+	switch {
+	case normalized <= 1:
+		step = 0.2
+	case normalized <= 2:
+		step = 0.5
+	case normalized <= 5:
+		step = 1.0
+	default:
+		step = 2.0
+	}
+
+	return step * magnitude
+}
+
+func calculateChartDimensions(values []float64, numBars int, minBarWidth, minHeight float64) (width, height int) {
+	// Найдем максимальное значение для высоты
+	max := findMaxValue(values)
+
+	// Рассчитываем ширину
+
+	// Добавляем отступы между столбцами (20% от ширины столбца)
+	barSpacing := minBarWidth * 0.2
+	totalWidth := (minBarWidth+barSpacing)*float64(numBars) + barSpacing
+
+	// Добавляем отступы для осей и подписей
+	width = int(totalWidth) + 100 // дополнительное место для оси Y и подписей
+
+	// Рассчитываем высоту
+	// Используем соотношение 16:9 если не задано минимальное значение
+	if minHeight <= 0 {
+		minHeight = totalWidth * 9.0 / 16.0
+	}
+
+	// Округляем высоту до ближайшего большего числа, кратного 50
+	height = int(math.Ceil(math.Max(minHeight, max*1.2)/50.0) * 50)
+
+	return width, height
 }

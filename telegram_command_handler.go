@@ -15,13 +15,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// HistogramData представляет данные для одного столбца гистограммы
-//
-//	type HistogramData struct {
-//		RangeStart float64
-//		RangeEnd   float64
-//		Count      int
-//	}
 type HistogramData struct {
 	RangeStart float64 `db:"rangeStart"` // Добавляем теги для правильного маппинга
 	RangeEnd   float64 `db:"rangeEnd"`
@@ -56,6 +49,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 			api.Send(msg)
 			return
 		}
+
 		handleColumnDetails(api, update, columnName)
 
 	default:
@@ -83,9 +77,19 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
+	statsMsg1, err := GenerateHistogramForString(db, tableName, columnName)
+	if err != nil {
+		log.Printf("#############################Error generating plot: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
+		api.Send(msg)
+		return
+	}
+	sendlerGraph(statsMsg1, "histForString", columnName, update.Message.Chat.ID, api)
+
 	statsMsg, err := generateDetailsTextFieldColumn(db, tableName, columnName)
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
 	api.Send(msg)
+
 }
 
 func generateDetailsTextFieldColumn(db *gorm.DB, tableName ClickhouseTableName, columnName string) (string, error) {
@@ -737,6 +741,7 @@ func sendlerGraph(graph []byte, name, columnName string, chatId int64, api *tgbo
 		Name:  fileName,
 		Bytes: graph,
 	}
+	fmt.Println("##########################################")
 	docMsg := tgbotapi.NewPhotoUpload(chatId, pngFile)
 	docMsg.Caption = fmt.Sprintf("Распределение значений: %s", columnName)
 
