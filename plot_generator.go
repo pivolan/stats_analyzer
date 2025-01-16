@@ -12,68 +12,40 @@ import (
 )
 
 func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
-	// Convert Unix timestamps to Time objects for proper time axis formatting
+	// Convert Unix timestamps to Time objects
 	timeValues := make([]time.Time, len(xValues))
 	for i, x := range xValues {
 		timeValues[i] = time.Unix(int64(x), 0)
 	}
 
-	// Create the time series
-	series := &chart.TimeSeries{
-		Name: "Count",
-		Style: chart.Style{
-			StrokeColor: drawing.ColorBlue,
-			StrokeWidth: 2,
-			FillColor:   drawing.ColorBlue.WithAlpha(100),
-		},
-	}
-
-	// Add data points
-	for i := range timeValues {
-		series.XValues = append(series.XValues, timeValues[i])
-		series.YValues = append(series.YValues, yValues[i])
+	// Create bars for each time point
+	var bars []chart.Value
+	for i := 0; i < len(timeValues); i++ {
+		bars = append(bars, chart.Value{
+			Value: yValues[i],
+			Label: timeValues[i].Format("2006-01-02 15:04"), // Format time as needed
+		})
 	}
 
 	// Configure the graph
-	graph := chart.Chart{
+	graph := chart.BarChart{
 		Title: "Time Series Distribution",
 		Background: chart.Style{
-			Padding: chart.Box{
-				Top:    40,
-				Left:   20,
-				Right:  20,
-				Bottom: 20,
-			},
-			FillColor: drawing.ColorWhite,
+			FillColor:   drawing.ColorWhite,
+			StrokeColor: drawing.ColorBlue,
 		},
-		XAxis: chart.XAxis{
-			Name:           "Time",
-			TickPosition:   chart.TickPositionBetweenTicks,
-			ValueFormatter: chart.TimeValueFormatter,
-			GridMajorStyle: chart.Style{
-				StrokeColor: drawing.ColorFromHex("efefef"),
-				StrokeWidth: 1.0,
-			},
-		},
+		Height:   1024,
+		Width:    2028,
+		BarWidth: 30,
+		Bars:     bars,
 		YAxis: chart.YAxis{
 			Name: "Count",
-			GridMajorStyle: chart.Style{
-				StrokeColor: drawing.ColorFromHex("efefef"),
-				StrokeWidth: 1.0,
-			},
-		},
-		Series: []chart.Series{
-			series,
 		},
 	}
 
 	// Add grid lines
 	graph.Background.StrokeWidth = 1
 	graph.Background.StrokeColor = drawing.ColorFromHex("efefef")
-
-	// Set dimensions
-	graph.Width = 2048
-	graph.Height = 1024
 
 	// Create buffer and render
 	buffer := bytes.NewBuffer([]byte{})

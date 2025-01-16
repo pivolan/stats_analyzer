@@ -124,22 +124,16 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		return
 	}
 
-	// SQL query to get date distribution
+	// Single SQL query to get grouped date counts
 	dateSQL := fmt.Sprintf(`
-        WITH date_counts AS (
-            SELECT
-                %s as date_group,
-                count(*) as count
-            FROM %s
-            WHERE %s IS NOT NULL
-            GROUP BY date_group
-            ORDER BY date_group
-        )
         SELECT
-            toString(date_group) as date,
-            count
-        FROM date_counts
-    `, dateTruncExpr, tableName, baseField)
+            toString(%s) as date,
+            count(*) as count
+        FROM %s
+        WHERE %s IS NOT NULL
+        GROUP BY %s
+        ORDER BY %s
+    `, dateTruncExpr, tableName, baseField, dateTruncExpr, dateTruncExpr)
 
 	type DateCount struct {
 		Date  string
@@ -155,37 +149,25 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	}
 
 	// Prepare data for visualization
-	xStart := make([]float64, len(dateCounts))
-	xEnd := make([]float64, len(dateCounts))
+	xValues := make([]float64, len(dateCounts))
 	yValues := make([]float64, len(dateCounts))
 
-	// Convert dates to float64 timestamps for visualization
+	// Convert dates to timestamps for visualization
 	for i, dc := range dateCounts {
 		t, err := time.Parse("2006-01-02 15:04:05", dc.Date)
 		if err != nil {
 			log.Printf("Error parsing date %s: %v", dc.Date, err)
 			continue
 		}
-		timestamp := float64(t.Unix())
-		xStart[i] = timestamp
-		xEnd[i] = timestamp + 86400 // Add one day in seconds
+		xValues[i] = float64(t.Unix())
 		yValues[i] = dc.Count
 	}
 
-	// Generate histogram
-	histogramData, err := DrawBar(xStart, xEnd, yValues)
-	if err != nil {
-		log.Printf("Error generating histogram: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации гистограммы")
-		api.Send(msg)
-		return
-	}
-
-	// Generate time series plot
-	timeSeriesData, err := DrawTimeSeries(xStart, yValues)
+	// Generate bar chart
+	graphData, err := DrawTimeSeries(xValues, yValues)
 	if err != nil {
 		log.Printf("Error generating time series plot: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика временного ряда")
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
 		api.Send(msg)
 		return
 	}
@@ -206,9 +188,8 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
 	api.Send(msg)
 
-	// Send visualizations with appropriate captions
-	sendGraphVisualization(histogramData, "histogram", columnName, update.Message.Chat.ID, api, timeUnit)
-	sendGraphVisualization(timeSeriesData, "timeseries", columnName, update.Message.Chat.ID, api, timeUnit)
+	// Send visualization
+	sendGraphVisualization(graphData, "timeseries", columnName, update.Message.Chat.ID, api, timeUnit)
 }
 
 // sum возвращает сумму всех значений в слайсе float64
