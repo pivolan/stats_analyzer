@@ -8,8 +8,82 @@ import (
 	"github.com/wcharczuk/go-chart/v2/drawing"
 	"gorm.io/gorm"
 	"log"
+	"time"
 )
 
+func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
+	// Convert Unix timestamps to Time objects for proper time axis formatting
+	timeValues := make([]time.Time, len(xValues))
+	for i, x := range xValues {
+		timeValues[i] = time.Unix(int64(x), 0)
+	}
+
+	// Create the time series
+	series := &chart.TimeSeries{
+		Name: "Count",
+		Style: chart.Style{
+			StrokeColor: drawing.ColorBlue,
+			StrokeWidth: 2,
+			FillColor:   drawing.ColorBlue.WithAlpha(100),
+		},
+	}
+
+	// Add data points
+	for i := range timeValues {
+		series.XValues = append(series.XValues, timeValues[i])
+		series.YValues = append(series.YValues, yValues[i])
+	}
+
+	// Configure the graph
+	graph := chart.Chart{
+		Title: "Time Series Distribution",
+		Background: chart.Style{
+			Padding: chart.Box{
+				Top:    40,
+				Left:   20,
+				Right:  20,
+				Bottom: 20,
+			},
+			FillColor: drawing.ColorWhite,
+		},
+		XAxis: chart.XAxis{
+			Name:           "Time",
+			TickPosition:   chart.TickPositionBetweenTicks,
+			ValueFormatter: chart.TimeValueFormatter,
+			GridMajorStyle: chart.Style{
+				StrokeColor: drawing.ColorFromHex("efefef"),
+				StrokeWidth: 1.0,
+			},
+		},
+		YAxis: chart.YAxis{
+			Name: "Count",
+			GridMajorStyle: chart.Style{
+				StrokeColor: drawing.ColorFromHex("efefef"),
+				StrokeWidth: 1.0,
+			},
+		},
+		Series: []chart.Series{
+			series,
+		},
+	}
+
+	// Add grid lines
+	graph.Background.StrokeWidth = 1
+	graph.Background.StrokeColor = drawing.ColorFromHex("efefef")
+
+	// Set dimensions
+	graph.Width = 2048
+	graph.Height = 1024
+
+	// Create buffer and render
+	buffer := bytes.NewBuffer([]byte{})
+	err := graph.Render(chart.PNG, buffer)
+	if err != nil {
+		return nil, fmt.Errorf("error rendering time series chart: %v", err)
+	}
+
+	return buffer.Bytes(), nil
+}
 func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error) {
 
 	var bars []chart.Value
@@ -41,6 +115,8 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 			Name: "Frequency",
 		},
 	}
+	graph.Background.StrokeWidth = 1
+	graph.Background.StrokeColor = drawing.ColorFromHex("efefef")
 
 	// Создаем буфер для записи изображения
 	buffer := bytes.NewBuffer([]byte{})
@@ -197,6 +273,8 @@ func DrawDensityPlot(xValues []float64, yValues []float64) ([]byte, error) {
 
 	// Создаем буфер для записи изображения
 	buffer := bytes.NewBuffer([]byte{})
+	graph.Background.StrokeWidth = 1
+	graph.Background.StrokeColor = drawing.ColorFromHex("efefef")
 
 	// Отрисовываем график в формате PNG
 	err := graph.Render(chart.PNG, buffer)
