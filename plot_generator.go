@@ -122,7 +122,7 @@ func GenerateHistogram(db *gorm.DB, tableName ClickhouseTableName, columnName st
 		xStart[i] = data.RangeStart
 		xEnd[i] = data.RangeEnd
 		yValues[i] = data.Count
-		xValues[i] = (xStart[i] + xEnd[i]/2)
+		xValues[i] = (xStart[i] + xEnd[i]) / 2
 		log.Printf("Point %d: XStart=%f,XEnd:=%f ,Y=%f", i, xStart[i], xEnd[i], yValues[i])
 	}
 
