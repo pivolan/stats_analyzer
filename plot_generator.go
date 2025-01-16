@@ -4,13 +4,10 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
-	"log"
-	"os"
-
 	"github.com/wcharczuk/go-chart/v2"
 	"github.com/wcharczuk/go-chart/v2/drawing"
 	"gorm.io/gorm"
+	"log"
 )
 
 func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error) {
@@ -55,20 +52,6 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 	}
 
 	return buffer.Bytes(), nil
-}
-
-// Вспомогательная функция для нахождения максимального значения
-func findMaxValue(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	max := values[0]
-	for _, v := range values {
-		if v > max {
-			max = v
-		}
-	}
-	return max
 }
 
 func GenerateHistogram(db *gorm.DB, tableName ClickhouseTableName, columnName string) ([]byte, error, []byte) {
@@ -130,72 +113,6 @@ func GenerateHistogram(db *gorm.DB, tableName ClickhouseTableName, columnName st
 	hist, _ := DrawBar(xStart, xEnd, yValues)
 	graph, _ := DrawDensityPlot(xValues, yValues)
 	return hist, nil, graph
-}
-
-func DrawPlot(xValues []float64, yValues []float64) ([]byte, error) {
-	graph := chart.Chart{
-		Title: "Performance Test",
-		XAxis: chart.XAxis{
-			Name: "Time",
-		},
-		YAxis: chart.YAxis{
-			Name: "Y asf",
-			NameStyle: chart.Style{
-				FontSize:  0,
-				FontColor: chart.ColorBlue,
-			},
-			Style:          chart.Style{},
-			Zero:           chart.GridLine{},
-			AxisType:       1,
-			Ascending:      true,
-			ValueFormatter: nil,
-			Range:          nil,
-			TickStyle:      chart.Style{},
-			Ticks:          nil,
-			GridLines:      nil,
-			GridMajorStyle: chart.Style{},
-			GridMinorStyle: chart.Style{},
-		},
-		Background: chart.Style{
-			Padding: chart.Box{
-				Top:    50,
-				Left:   25,
-				Right:  25,
-				Bottom: 10,
-			},
-			FillColor: drawing.ColorFromHex("efefef"),
-		},
-		Series: []chart.Series{
-			// 1. Линейный график
-			chart.ContinuousSeries{
-				Name:            "Linear",
-				Style:           chart.Style{StrokeColor: chart.ColorBlue},
-				XValueFormatter: nil,
-				YValueFormatter: nil,
-				XValues:         xValues,
-				YValues:         yValues,
-			},
-		},
-	}
-
-	// Добавляем легенду
-	graph.Elements = []chart.Renderable{
-		chart.Legend(&graph),
-	}
-
-	f, err := os.CreateTemp("./", "output_*.png")
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	err = graph.Render(chart.PNG, f)
-	if err != nil {
-		return nil, err
-	}
-	f.Seek(0, 0)
-	all, err := io.ReadAll(f)
-	return all, err
 }
 
 func DrawDensityPlot(xValues []float64, yValues []float64) ([]byte, error) {
