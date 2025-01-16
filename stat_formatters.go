@@ -102,7 +102,7 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 		result.WriteString("📝 Date Columns:\n")
 		for _, field := range dateColumns {
 			//stat := stats[field]
-			result.WriteString(fmt.Sprintf("• %s; /details_%s\n", field[11:], field))
+			result.WriteString(fmt.Sprintf("• %s; /%s\n", field[11:], field))
 		}
 	}
 	return result.String()

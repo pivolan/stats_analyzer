@@ -35,6 +35,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	// Префиксы команд
 	graphPrefix := "graph_"
 	detailsPrefix := "details_"
+	datesPrefix := "dates_"
 
 	// Проверяем и обрабатываем команды по префиксам
 	switch {
@@ -57,11 +58,25 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 			return
 		}
 		handleColumnDetails(api, update, columnName)
+	case strings.HasPrefix(fullCommand, datesPrefix):
+		// Получаем имя колонки, отрезая префикс
+		columnName := strings.TrimPrefix(fullCommand, datesPrefix)
+		if columnName == "" {
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Укажите имя колонки после dates")
+			api.Send(msg)
+			return
+		}
+		handleColumnDates(api, update, columnName)
 
 	default:
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неизвестная команда. Используйте: /graph<имя_колонки> или /details<имя_колонки>")
 		api.Send(msg)
 	}
+}
+
+func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "В разработке")
+	api.Send(msg)
 }
 
 func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
