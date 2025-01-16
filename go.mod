@@ -17,6 +17,8 @@ require (
 )
 
 require (
+	github.com/ClickHouse/clickhouse-go v1.5.4 // indirect
+	github.com/cloudflare/golz4 v0.0.0-20150217214814-ef862a3cdc58 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/frankban/quicktest v1.14.6 // indirect
 	github.com/go-sql-driver/mysql v1.7.0 // indirect

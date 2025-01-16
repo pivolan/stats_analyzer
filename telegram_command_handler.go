@@ -2,23 +2,30 @@ package main
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
-	"github.com/pivolan/stats_analyzer/config"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"log"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
+	"github.com/pivolan/stats_analyzer/config"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // HistogramData представляет данные для одного столбца гистограммы
+//
+//	type HistogramData struct {
+//		RangeStart float64
+//		RangeEnd   float64
+//		Count      int
+//	}
 type HistogramData struct {
-	RangeStart float64
-	RangeEnd   float64
-	Count      int
+	RangeStart float64 `db:"rangeStart"` // Добавляем теги для правильного маппинга
+	RangeEnd   float64 `db:"rangeEnd"`
+	Count      int     `db:"count"`
 }
 
 func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
@@ -262,8 +269,10 @@ func GenerateColumnHistogram(db *gorm.DB, tableName ClickhouseTableName, columnN
 		}
 		histData = append(histData, rangeData)
 	}
-	return generateSVGHistogram(histData, columnName), nil
+	return "", nil
+	// return generateSVGHistogram(histData, columnName), nil
 }
+
 func generateSVGHistogram(histData []HistogramData, columnName string) string {
 	// Параметры SVG
 	width := 800
@@ -366,7 +375,7 @@ func generateSVGHistogram(histData []HistogramData, columnName string) string {
 
 	// Добавляем подписи осей
 	svg += fmt.Sprintf(`
-        <text x="%d" y="%d" transform="rotate(-90 %d,%d)" 
+        <text x="%d" y="%d" transform="rotate(-90 %d,%d)"
               text-anchor="middle" class="axis-label">Количество (log scale)</text>
         <text x="%d" y="%d" text-anchor="middle" class="axis-label">Значение</text>`,
 		padding-40, height/2, padding-40, height/2,
@@ -394,7 +403,6 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		api.Send(msg)
 		return
 	}
-
 	// Подключаемся к базе
 	cfg := config.GetConfig()
 	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{
@@ -409,16 +417,16 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 
 	// SQL для получения основной статистики и квантилей
 	statsSQL := fmt.Sprintf(`
-        SELECT 
-            min(%[1]s) as min_value,
-            max(%[1]s) as max_value,
-            avg(%[1]s) as avg_value,
-            median(%[1]s) as median_value,
-            count(%[1]s) as total_count,
-            quantile(0.25)(%[1]s) as q1,
-            quantile(0.75)(%[1]s) as q3,
-            quantiles(0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99)(%[1]s) as main_quantiles
-        FROM %[2]s
+	SELECT 
+	min(%[1]s) as min_value,
+	max(%[1]s) as max_value,
+	avg(%[1]s) as avg_value,
+	median(%[1]s) as median_value,
+	count(%[1]s) as total_count,
+	quantile(0.25)(%[1]s) as q1,
+	quantile(0.75)(%[1]s) as q3,
+	quantiles(0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99)(%[1]s) as main_quantiles
+	FROM %[2]s
     `, columnName, tableName)
 
 	var stats struct {
@@ -526,9 +534,15 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		xValues[i] = (prevBorder + borderValue) / 2
 		yValues[i] = float64(rangeCount.Count)
 	}
+	// pngData, err := DrawPlot(xValues, yValues)
+	// if err != nil {
+	// 	log.Printf("Error generating plot: %v", err)
+	// 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
+	// 	api.Send(msg)
+	// 	return
+	// }
 
-	// Генерируем график
-	pngData, err := DrawPlot(xValues, yValues)
+	pngData, err, pngData2 := GenerateHistogram(db, tableName, columnName)
 	if err != nil {
 		log.Printf("Error generating plot: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
@@ -578,22 +592,158 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	api.Send(msg)
 
 	// Отправляем график
-	fileName := fmt.Sprintf("histogram_%s_%s.png",
-		columnName,
-		time.Now().Format("20060102-150405"))
 
-	pngFile := tgbotapi.FileBytes{
-		Name:  fileName,
-		Bytes: pngData,
+	sendlerGraph(pngData, "histogram", columnName, update.Message.Chat.ID, api)
+	sendlerGraph(pngData2, "Density", columnName, update.Message.Chat.ID, api)
+
+}
+
+type StringColumnStats struct {
+	TotalRows          int64
+	UniqueValues       int64
+	NullCount          int64
+	EmptyStringCount   int64
+	WhitespaceCount    int64
+	MinLength          int
+	MaxLength          int
+	AvgLength          float64
+	PopularValues      []ValueCount
+	UnpopularValues    []ValueCount
+	LengthDistribution []LengthFrequency
+}
+
+type ValueCount struct {
+	Value   string
+	Count   int64
+	Percent float64
+}
+
+type LengthFrequency struct {
+	Length    int
+	Frequency int64
+}
+
+func analyzeStringColumn(db *gorm.DB, tableName string, columnName string) (*StringColumnStats, error) {
+	stats := &StringColumnStats{}
+
+	// Основная статистика
+	basicStatsSQL := fmt.Sprintf(`
+        SELECT 
+            COUNT(*) as total_rows,
+            uniq(%[1]s) as unique_values,
+            COUNT(*) - COUNT(%[1]s) as null_count,
+            SUM(CASE WHEN %[1]s = '' THEN 1 ELSE 0 END) as empty_string_count,
+            SUM(CASE WHEN length(trim(%[1]s)) = 0 THEN 1 ELSE 0 END) as whitespace_count,
+            min(length(%[1]s)) as min_length,
+            max(length(%[1]s)) as max_length,
+            avg(length(%[1]s)) as avg_length
+        FROM %[2]s
+    `, columnName, tableName)
+
+	type BasicStats struct {
+		TotalRows        int64   `db:"total_rows"`
+		UniqueValues     int64   `db:"unique_values"`
+		NullCount        int64   `db:"null_count"`
+		EmptyStringCount int64   `db:"empty_string_count"`
+		WhitespaceCount  int64   `db:"whitespace_count"`
+		MinLength        int     `db:"min_length"`
+		MaxLength        int     `db:"max_length"`
+		AvgLength        float64 `db:"avg_length"`
 	}
 
-	docMsg := tgbotapi.NewPhotoUpload(update.Message.Chat.ID, pngFile)
+	var basicStats BasicStats
+	if err := db.Raw(basicStatsSQL).Scan(&basicStats).Error; err != nil {
+		return nil, fmt.Errorf("error getting basic stats: %v", err)
+	}
+
+	stats.TotalRows = basicStats.TotalRows
+	stats.UniqueValues = basicStats.UniqueValues
+	stats.NullCount = basicStats.NullCount
+	stats.EmptyStringCount = basicStats.EmptyStringCount
+	stats.WhitespaceCount = basicStats.WhitespaceCount
+	stats.MinLength = basicStats.MinLength
+	stats.MaxLength = basicStats.MaxLength
+	stats.AvgLength = basicStats.AvgLength
+
+	// Популярные значения
+	popularSQL := fmt.Sprintf(`
+        WITH value_counts AS (
+            SELECT 
+                %s as value,
+                COUNT(*) as count,
+                COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () as percentage
+            FROM %s
+            WHERE %s IS NOT NULL
+            GROUP BY %s
+        )
+        SELECT value, count, percentage
+        FROM value_counts
+        ORDER BY count DESC
+        LIMIT 10
+    `, columnName, tableName, columnName, columnName)
+
+	if err := db.Raw(popularSQL).Scan(&stats.PopularValues).Error; err != nil {
+		return nil, fmt.Errorf("error getting popular values: %v", err)
+	}
+
+	// Непопулярные значения
+	unpopularSQL := fmt.Sprintf(`
+        WITH value_counts AS (
+            SELECT 
+                %s as value,
+                COUNT(*) as count,
+                COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () as percentage
+            FROM %s
+            WHERE %s IS NOT NULL
+            GROUP BY %s
+        )
+        SELECT value, count, percentage
+        FROM value_counts
+        ORDER BY count ASC
+        LIMIT 10
+    `, columnName, tableName, columnName, columnName)
+
+	if err := db.Raw(unpopularSQL).Scan(&stats.UnpopularValues).Error; err != nil {
+		return nil, fmt.Errorf("error getting unpopular values: %v", err)
+	}
+
+	// Распределение длин строк
+	lengthDistSQL := fmt.Sprintf(`
+        WITH lengths AS (
+            SELECT length(%s) as str_length
+            FROM %s
+            WHERE %s IS NOT NULL
+        )
+        SELECT 
+            str_length as length,
+            COUNT(*) as frequency
+        FROM lengths
+        GROUP BY str_length
+        ORDER BY str_length
+    `, columnName, tableName, columnName)
+
+	if err := db.Raw(lengthDistSQL).Scan(&stats.LengthDistribution).Error; err != nil {
+		return nil, fmt.Errorf("error getting length distribution: %v", err)
+	}
+
+	return stats, nil
+}
+
+func sendlerGraph(graph []byte, name, columnName string, chatId int64, api *tgbotapi.BotAPI) {
+	fileName := fmt.Sprintf("%s_%s_%s.png",
+		name, columnName,
+		time.Now().Format("20060102-150405"))
+	pngFile := tgbotapi.FileBytes{
+		Name:  fileName,
+		Bytes: graph,
+	}
+	docMsg := tgbotapi.NewPhotoUpload(chatId, pngFile)
 	docMsg.Caption = fmt.Sprintf("Распределение значений: %s", columnName)
 
-	_, err = api.Send(docMsg)
+	_, err := api.Send(docMsg)
 	if err != nil {
 		log.Printf("Error sending PNG: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка отправки графика")
+		msg := tgbotapi.NewMessage(chatId, "Ошибка отправки графика")
 		api.Send(msg)
 		return
 	}
