@@ -4,16 +4,60 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"math"
-	"os"
+	"time"
 
 	"github.com/wcharczuk/go-chart/v2"
 	"github.com/wcharczuk/go-chart/v2/drawing"
 	"gorm.io/gorm"
 )
 
+func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
+	// Convert Unix timestamps to Time objects
+	timeValues := make([]time.Time, len(xValues))
+	for i, x := range xValues {
+		timeValues[i] = time.Unix(int64(x), 0)
+	}
+
+	// Create bars for each time point
+	var bars []chart.Value
+	for i := 0; i < len(timeValues); i++ {
+		bars = append(bars, chart.Value{
+			Value: yValues[i],
+			Label: timeValues[i].Format("2006-01-02 15:04"), // Format time as needed
+		})
+	}
+
+	// Configure the graph
+	graph := chart.BarChart{
+		Title: "Time Series Distribution",
+		Background: chart.Style{
+			FillColor:   drawing.ColorWhite,
+			StrokeColor: drawing.ColorBlue,
+		},
+		Height:   1024,
+		Width:    2028,
+		BarWidth: 30,
+		Bars:     bars,
+		YAxis: chart.YAxis{
+			Name: "Count",
+		},
+	}
+
+	// Add grid lines
+	graph.Background.StrokeWidth = 1
+	graph.Background.StrokeColor = drawing.ColorFromHex("efefef")
+
+	// Create buffer and render
+	buffer := bytes.NewBuffer([]byte{})
+	err := graph.Render(chart.PNG, buffer)
+	if err != nil {
+		return nil, fmt.Errorf("error rendering time series chart: %v", err)
+	}
+
+	return buffer.Bytes(), nil
+}
 func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error) {
 	var ticks []chart.Tick
 
@@ -96,20 +140,6 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 	return buffer.Bytes(), nil
 }
 
-// Вспомогательная функция для нахождения максимального значения
-func findMaxValue(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	max := values[0]
-	for _, v := range values {
-		if v > max {
-			max = v
-		}
-	}
-	return max
-}
-
 func GenerateHistogram(db *gorm.DB, tableName ClickhouseTableName, columnName string) ([]byte, error, []byte) {
 	// SQL запрос для получения гистограммы
 	histogramSQL := fmt.Sprintf(`
@@ -161,7 +191,7 @@ func GenerateHistogram(db *gorm.DB, tableName ClickhouseTableName, columnName st
 		xStart[i] = data.RangeStart
 		xEnd[i] = data.RangeEnd
 		yValues[i] = data.Count
-		xValues[i] = (xStart[i] + xEnd[i]/2)
+		xValues[i] = (xStart[i] + xEnd[i]) / 2
 		log.Printf("Point %d: XStart=%f,XEnd:=%f ,Y=%f", i, xStart[i], xEnd[i], yValues[i])
 	}
 
@@ -169,79 +199,6 @@ func GenerateHistogram(db *gorm.DB, tableName ClickhouseTableName, columnName st
 	hist, _ := DrawBar(xStart, xEnd, yValues)
 	graph, _ := DrawDensityPlot(xValues, yValues)
 	return hist, nil, graph
-}
-
-func DrawPlot(xValues []float64, yValues []float64) ([]byte, error) {
-	graph := chart.Chart{
-		Title: "Performance Test",
-		XAxis: chart.XAxis{
-			Name: "Time",
-		},
-		YAxis: chart.YAxis{
-			Name: "Y asf",
-			NameStyle: chart.Style{
-				FontSize:  0,
-				FontColor: chart.ColorBlue,
-			},
-			Style:          chart.Style{},
-			Zero:           chart.GridLine{},
-			AxisType:       1,
-			Ascending:      true,
-			ValueFormatter: nil,
-			Range:          nil,
-			TickStyle:      chart.Style{},
-			Ticks:          nil,
-			GridLines:      nil,
-			GridMajorStyle: chart.Style{
-				StrokeColor:     chart.ColorAlternateGray,
-				StrokeWidth:     1.0,
-				StrokeDashArray: []float64{5.0, 5.0}, // Пунктирная линия
-			},
-			GridMinorStyle: chart.Style{
-				StrokeColor: chart.ColorAlternateGray,
-				StrokeWidth: 0.5,
-			},
-		},
-		Background: chart.Style{
-			Padding: chart.Box{
-				Top:    50,
-				Left:   25,
-				Right:  25,
-				Bottom: 10,
-			},
-			FillColor: drawing.ColorFromHex("efefef"),
-		},
-		Series: []chart.Series{
-			// 1. Линейный график
-			chart.ContinuousSeries{
-				Name:            "Linear",
-				Style:           chart.Style{StrokeColor: chart.ColorBlue},
-				XValueFormatter: nil,
-				YValueFormatter: nil,
-				XValues:         xValues,
-				YValues:         yValues,
-			},
-		},
-	}
-
-	// Добавляем легенду
-	graph.Elements = []chart.Renderable{
-		chart.Legend(&graph),
-	}
-
-	f, err := os.CreateTemp("./", "output_*.png")
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	err = graph.Render(chart.PNG, f)
-	if err != nil {
-		return nil, err
-	}
-	f.Seek(0, 0)
-	all, err := io.ReadAll(f)
-	return all, err
 }
 
 func DrawDensityPlot(xValues []float64, yValues []float64) ([]byte, error) {
@@ -326,6 +283,8 @@ func DrawDensityPlot(xValues []float64, yValues []float64) ([]byte, error) {
 
 	// Создаем буфер для записи изображения
 	buffer := bytes.NewBuffer([]byte{})
+	graph.Background.StrokeWidth = 1
+	graph.Background.StrokeColor = drawing.ColorFromHex("efefef")
 
 	// Отрисовываем график в формате PNG
 	err := graph.Render(chart.PNG, buffer)
@@ -499,4 +458,16 @@ func calculateChartDimensions(values []float64, numBars int, minBarWidth, minHei
 	height = int(math.Ceil(math.Max(minHeight, max*1.2)/50.0) * 50)
 
 	return width, height
+}
+func findMaxValue(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }

@@ -402,7 +402,7 @@ func TestImportDataIntoClickHouseEnv(t *testing.T) {
 	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	assert.NoError(t, err)
 
-	table, err := importDataIntoClickHouse("/Users/igorpecenikin/Downloads/a.csv", db)
+	table, err := importDataIntoClickHouse("ecommerce_data.csv", db)
 	assert.NoError(t, err)
 	fmt.Println(table)
 	stat := analyzeStatistics(table)

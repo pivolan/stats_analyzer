@@ -116,7 +116,7 @@ func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table ClickhouseTableN
 			for _, truncDate := range truncateDatesList {
 				sql := "SELECT toString(date_trunc('" + truncDate + "', " + columnInfo.Name + ")) as datetime, count(*) as cnt, 'info' as common, " + strings.Join(fields, ",") +
 					" FROM " + string(table) + " GROUP BY datetime ORDER BY 1 DESC"
-				sqls[fmt.Sprintf("%s_%s", columnInfo.Name, truncDate)] = sql
+				sqls[fmt.Sprintf("%s__%s", columnInfo.Name, truncDate)] = sql
 			}
 		}
 	}

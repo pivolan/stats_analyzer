@@ -28,6 +28,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	// Префиксы команд
 	graphPrefix := "graph_"
 	detailsPrefix := "details_"
+	datesPrefix := "dates_"
 
 	// Проверяем и обрабатываем команды по префиксам
 	switch {
@@ -51,6 +52,15 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 		}
 
 		handleColumnDetails(api, update, columnName)
+	case strings.HasPrefix(fullCommand, datesPrefix):
+		// Получаем имя колонки, отрезая префикс
+		columnName := strings.TrimPrefix(fullCommand, datesPrefix)
+		if columnName == "" {
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Укажите имя колонки после dates")
+			api.Send(msg)
+			return
+		}
+		handleColumnDates(api, update, columnName)
 
 	default:
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неизвестная команда. Используйте: /graph<имя_колонки> или /details<имя_колонки>")
@@ -58,6 +68,132 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	}
 }
 
+func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
+	tableName, exists := currentTable[update.Message.Chat.ID]
+	if !exists {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Сначала выберите таблицу")
+		api.Send(msg)
+		return
+	}
+
+	// Parse column name to extract base field and time unit
+	parts := strings.Split(columnName, "__")
+	if len(parts) != 2 {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неверный формат имени колонки. Ожидается: field__timeunit")
+		api.Send(msg)
+		return
+	}
+
+	baseField := parts[0]
+	timeUnit := parts[1]
+
+	// Connect to database
+	cfg := config.GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		log.Printf("Error connecting to database: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка подключения к базе данных")
+		api.Send(msg)
+		return
+	}
+
+	// Prepare date_trunc expression based on time unit
+	dateTruncExpr := ""
+	switch timeUnit {
+	case "hour":
+		dateTruncExpr = fmt.Sprintf("date_trunc('hour', %s)", baseField)
+	case "day":
+		dateTruncExpr = fmt.Sprintf("date_trunc('day', %s)", baseField)
+	case "week":
+		dateTruncExpr = fmt.Sprintf("date_trunc('week', %s)", baseField)
+	case "month":
+		dateTruncExpr = fmt.Sprintf("date_trunc('month', %s)", baseField)
+	case "year":
+		dateTruncExpr = fmt.Sprintf("date_trunc('year', %s)", baseField)
+	default:
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неподдерживаемая единица времени. Используйте: hour, day, week, month или year")
+		api.Send(msg)
+		return
+	}
+
+	// Single SQL query to get grouped date counts
+	dateSQL := fmt.Sprintf(`
+        SELECT
+            toString(%s) as date,
+            count(*) as count
+        FROM %s
+        WHERE %s IS NOT NULL
+        GROUP BY %s
+        ORDER BY %s
+    `, dateTruncExpr, tableName, baseField, dateTruncExpr, dateTruncExpr)
+
+	type DateCount struct {
+		Date  string
+		Count float64
+	}
+
+	var dateCounts []DateCount
+	if err := db.Raw(dateSQL).Scan(&dateCounts).Error; err != nil {
+		log.Printf("Error getting date counts: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка получения статистики по датам")
+		api.Send(msg)
+		return
+	}
+
+	// Prepare data for visualization
+	xValues := make([]float64, len(dateCounts))
+	yValues := make([]float64, len(dateCounts))
+
+	// Convert dates to timestamps for visualization
+	for i, dc := range dateCounts {
+		t, err := time.Parse("2006-01-02 15:04:05", dc.Date)
+		if err != nil {
+			log.Printf("Error parsing date %s: %v", dc.Date, err)
+			continue
+		}
+		xValues[i] = float64(t.Unix())
+		yValues[i] = dc.Count
+	}
+
+	// Generate bar chart
+	graphData, err := DrawTimeSeries(xValues, yValues)
+	if err != nil {
+		log.Printf("Error generating time series plot: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
+		api.Send(msg)
+		return
+	}
+
+	// Send statistics message
+	statsMsg := fmt.Sprintf(
+		"Статистика по датам в колонке %s:\n\n"+
+			"• Всего записей: %d\n"+
+			"• Уникальных дат: %d\n"+
+			"• Период: с %s по %s\n",
+		columnName,
+		int(sum(yValues)),
+		len(dateCounts),
+		dateCounts[0].Date,
+		dateCounts[len(dateCounts)-1].Date,
+	)
+
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
+	api.Send(msg)
+
+	// Send visualization
+	sendGraphVisualization(graphData, "timeseries", columnName, update.Message.Chat.ID, api, timeUnit)
+}
+
+// sum возвращает сумму всех значений в слайсе float64
+func sum(values []float64) float64 {
+	var total float64
+	for _, v := range values {
+		total += v
+	}
+	return total
+}
 func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
 	tableName, exists := currentTable[update.Message.Chat.ID]
 	if !exists {
