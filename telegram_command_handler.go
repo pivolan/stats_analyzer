@@ -223,7 +223,7 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	sendChartFromColгmn(statsMsg1, "histForString", columnName, update.Message.Chat.ID, api)
+	sendChartFromColumn(statsMsg1, "histForString", columnName, update.Message.Chat.ID, api)
 
 	statsMsg, err := generateDetailsTextFieldColumn(db, tableName, columnName)
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
@@ -736,8 +736,8 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 
 	// Отправляем график
 
-	sendChartFromColгmn(pngData, "histogram", columnName, update.Message.Chat.ID, api)
-	sendChartFromColгmn(pngData2, "Density", columnName, update.Message.Chat.ID, api)
+	sendChartFromColumn(pngData, "histogram", columnName, update.Message.Chat.ID, api)
+	sendChartFromColumn(pngData2, "Density", columnName, update.Message.Chat.ID, api)
 
 }
 
@@ -872,7 +872,7 @@ func analyzeStringColumn(db *gorm.DB, tableName string, columnName string) (*Str
 	return stats, nil
 }
 
-func sendChartFromColгmn(graph []byte, name, columnName string, chatId int64, api *tgbotapi.BotAPI) {
+func sendChartFromColumn(graph []byte, name, columnName string, chatId int64, api *tgbotapi.BotAPI) {
 	fileName := fmt.Sprintf("%s_%s_%s.png",
 		name, columnName,
 		time.Now().Format("20060102-150405"))
