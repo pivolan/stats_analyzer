@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -61,6 +62,8 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 			return
 		}
 		handleColumnDates(api, update, columnName)
+	case fullCommand == "start":
+		handleStartCommand(api, update)
 
 	default:
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неизвестная команда. Используйте: /graph<имя_колонки> или /details<имя_колонки>")
@@ -220,7 +223,7 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	sendlerGraph(statsMsg1, "histForString", columnName, update.Message.Chat.ID, api)
+	sendChartFromColгmn(statsMsg1, "histForString", columnName, update.Message.Chat.ID, api)
 
 	statsMsg, err := generateDetailsTextFieldColumn(db, tableName, columnName)
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
@@ -733,8 +736,8 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 
 	// Отправляем график
 
-	sendlerGraph(pngData, "histogram", columnName, update.Message.Chat.ID, api)
-	sendlerGraph(pngData2, "Density", columnName, update.Message.Chat.ID, api)
+	sendChartFromColгmn(pngData, "histogram", columnName, update.Message.Chat.ID, api)
+	sendChartFromColгmn(pngData2, "Density", columnName, update.Message.Chat.ID, api)
 
 }
 
@@ -869,7 +872,7 @@ func analyzeStringColumn(db *gorm.DB, tableName string, columnName string) (*Str
 	return stats, nil
 }
 
-func sendlerGraph(graph []byte, name, columnName string, chatId int64, api *tgbotapi.BotAPI) {
+func sendChartFromColгmn(graph []byte, name, columnName string, chatId int64, api *tgbotapi.BotAPI) {
 	fileName := fmt.Sprintf("%s_%s_%s.png",
 		name, columnName,
 		time.Now().Format("20060102-150405"))
@@ -877,7 +880,7 @@ func sendlerGraph(graph []byte, name, columnName string, chatId int64, api *tgbo
 		Name:  fileName,
 		Bytes: graph,
 	}
-	fmt.Println("##########################################")
+
 	docMsg := tgbotapi.NewPhotoUpload(chatId, pngFile)
 	docMsg.Caption = fmt.Sprintf("Распределение значений: %s", columnName)
 
@@ -885,6 +888,20 @@ func sendlerGraph(graph []byte, name, columnName string, chatId int64, api *tgbo
 	if err != nil {
 		log.Printf("Error sending PNG: %v", err)
 		msg := tgbotapi.NewMessage(chatId, "Ошибка отправки графика")
+		api.Send(msg)
+		return
+	}
+}
+func handleStartCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
+	message := update.Message
+	if message != nil && message.IsCommand() {
+
+		f, err := os.ReadFile("welcome.xml")
+
+		if err != nil {
+			log.Printf("[Error] open welcome file: %v", err)
+		}
+		msg := tgbotapi.NewMessage(message.Chat.ID, string(f))
 		api.Send(msg)
 		return
 	}
