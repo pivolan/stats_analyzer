@@ -7,21 +7,17 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/pivolan/stats_analyzer/domain/models"
 )
 
-type HeaderAnalysis struct {
-	Headers        []string // Итоговые заголовки
-	FirstRowIsData bool     // Является ли первая строка данными
-	FirstDataRow   []string // Первая строка с данными
-}
-
 // AnalyzeHeaders анализирует первую строку CSV и определяет структуру заголовков
-func AnalyzeHeaders(firstRow []string) *HeaderAnalysis {
+func AnalyzeHeaders(firstRow []string) *models.HeaderAnalysis {
 	if len(firstRow) == 0 {
 		return nil
 	}
 
-	result := &HeaderAnalysis{
+	result := &models.HeaderAnalysis{
 		Headers:        make([]string, len(firstRow)),
 		FirstRowIsData: false,
 		FirstDataRow:   firstRow,

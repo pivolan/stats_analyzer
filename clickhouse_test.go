@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"testing"
+
 	"github.com/pivolan/stats_analyzer/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"os"
-	"testing"
 )
 
 // Mock для GORM DB
@@ -402,7 +403,7 @@ func TestImportDataIntoClickHouseEnv(t *testing.T) {
 	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	assert.NoError(t, err)
 
-	table, err := importDataIntoClickHouse("ecommerce_data.csv", db)
+	table, err := importDataIntoClickHouse("a.csv", db)
 	assert.NoError(t, err)
 	fmt.Println(table)
 	stat := analyzeStatistics(table)

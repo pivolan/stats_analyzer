@@ -24,6 +24,16 @@ import (
 	"gorm.io/gorm"
 )
 
+type CommonStat struct {
+	Count                                                                   int64
+	Uniq                                                                    int64
+	Avg, Min, Max, Median, Quantile001, Quantile01, Quantile099, Quantile09 float64
+	Dates                                                                   []map[string]interface{}
+	Groups                                                                  []map[string]interface{}
+	IsNumeric                                                               bool
+	Title                                                                   string
+}
+
 type DBInterface interface {
 	Exec(query string, values ...interface{}) *gorm.DB
 }
@@ -406,19 +416,14 @@ func min(a, b int) int {
 	return b
 }
 
-type ColumnInfo struct {
-	Name string
-	Type string //Date DateTime64 Int64 Float64
-}
-
-func getColumnAndTypeList(db *gorm.DB, tableName models.ClickhouseTableName) ([]ColumnInfo, error) {
+func getColumnAndTypeList(db *gorm.DB, tableName models.ClickhouseTableName) ([]models.ColumnInfo, error) {
 	query := fmt.Sprintf("DESCRIBE TABLE %s", tableName)
 	tx := db.Raw(query)
 	if tx.Error != nil {
 		return nil, tx.Error
 	}
 
-	var columns []ColumnInfo
+	var columns []models.ColumnInfo
 	tx.Scan(&columns)
 
 	// Sort columns by Name
@@ -429,15 +434,8 @@ func getColumnAndTypeList(db *gorm.DB, tableName models.ClickhouseTableName) ([]
 	return columns, nil
 }
 
-type StatsQueryResultType string
-
-const RESULT_MANY StatsQueryResultType = "many"
-const RESULT_SINGLE StatsQueryResultType = "single"
-
-type QueryResult struct {
-	Sql          string
-	SingleOrMany StatsQueryResultType
-}
+const RESULT_MANY models.StatsQueryResultType = "many"
+const RESULT_SINGLE models.StatsQueryResultType = "single"
 
 func IsNumericType(_type string) bool {
 	return go_utils.InArray(_type, []string{"Int64", "Float64", "Nullable(Int64)", "Nullable(Float64)"})
@@ -455,16 +453,6 @@ func RemoveSpecialChars(s string) string {
 
 	// Return the cleaned string as a string
 	return buf.String()
-}
-
-type CommonStat struct {
-	Count                                                                   int64
-	Uniq                                                                    int64
-	Avg, Min, Max, Median, Quantile001, Quantile01, Quantile099, Quantile09 float64
-	Dates                                                                   []map[string]interface{}
-	Groups                                                                  []map[string]interface{}
-	IsNumeric                                                               bool
-	Title                                                                   string
 }
 
 func (c *CommonStat) Set(key string, value interface{}) error {
@@ -626,7 +614,7 @@ func setZeroFields(a *CommonStat, b CommonStat) {
 func excludeColumn(name string) bool {
 	return go_utils.InArray(name, []string{"id", "slug"})
 }
-func generateSqlForUniqCounts(columns []ColumnInfo, table models.ClickhouseTableName) (sql string) {
+func generateSqlForUniqCounts(columns []models.ColumnInfo, table models.ClickhouseTableName) (sql string) {
 	fields := []string{}
 	method := "uniq"
 	for _, column := range columns {
@@ -640,16 +628,16 @@ func generateSqlForUniqCounts(columns []ColumnInfo, table models.ClickhouseTable
 	}
 	return "SELECT " + strings.Join(fields, ",") + " FROM " + string(table)
 }
-func generateSqlForCount(columns []ColumnInfo, table models.ClickhouseTableName) (sql string) {
+func generateSqlForCount(columns []models.ColumnInfo, table models.ClickhouseTableName) (sql string) {
 	return "SELECT count() FROM " + string(table)
 }
 
-func generateSqlForNumericColumnsStats(columns []ColumnInfo, table models.ClickhouseTableName) (sql string) {
+func generateSqlForNumericColumnsStats(columns []models.ColumnInfo, table models.ClickhouseTableName) (sql string) {
 	statMethods := []string{"quantile(0.01)", "quantile(0.99)", "quantile(0.1)", "quantile(0.9)", "median", "avg", "max", "min"}
 	fields := columnAggregatesSelectSqlGenerator(columns, statMethods)
 	return "SELECT " + strings.Join(fields, ",") + " FROM " + string(table)
 }
-func columnAggregatesSelectSqlGenerator(columns []ColumnInfo, aggregatesMethods []string) []string {
+func columnAggregatesSelectSqlGenerator(columns []models.ColumnInfo, aggregatesMethods []string) []string {
 	statMethods := aggregatesMethods
 	fields := []string{}
 	for _, column := range columns {

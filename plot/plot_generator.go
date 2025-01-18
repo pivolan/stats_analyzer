@@ -299,7 +299,7 @@ func DrawDensityPlot(xValues []float64, yValues []float64) ([]byte, error) {
 func DrawBarXString(x []string, y []float64) ([]byte, error) {
 	var bars chart.Values
 	var ticks []chart.Tick
-	width, Height := calculateChartDimensions(y, len(x), 60, 400)
+	width, Height := calculateChartDimensions(y, len(x), 60, 360)
 	maxValue := findMaxValue(y)
 	gridStep := calculateGridStep(maxValue)
 	maxY := math.Ceil(maxValue/gridStep) * gridStep

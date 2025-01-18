@@ -18,12 +18,6 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-type HistogramData struct {
-	RangeStart float64 `db:"rangeStart"` // Добавляем теги для правильного маппинга
-	RangeEnd   float64 `db:"rangeEnd"`
-	Count      int     `db:"count"`
-}
-
 func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	// Получаем полную команду (без слеша)
 	fullCommand := update.Message.Command()
@@ -133,12 +127,7 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
         ORDER BY %s
     `, dateTruncExpr, tableName, baseField, dateTruncExpr, dateTruncExpr)
 
-	type DateCount struct {
-		Date  string
-		Count float64
-	}
-
-	var dateCounts []DateCount
+	var dateCounts []models.DateCount
 	if err := db.Raw(dateSQL).Scan(&dateCounts).Error; err != nil {
 		log.Printf("Error getting date counts: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка получения статистики по датам")
@@ -285,13 +274,7 @@ func generateDetailsTextFieldColumn(db *gorm.DB, tableName models.ClickhouseTabl
         LIMIT 5)
     `, columnName, tableName)
 
-	type FrequencyData struct {
-		Value string
-		Count int64
-		Type  string
-	}
-
-	var frequencyResults []FrequencyData
+	var frequencyResults []models.FrequencyData
 	if err := db.Raw(frequencySQL).Scan(&frequencyResults).Error; err != nil {
 		log.Printf("Error getting frequency data: %v", err)
 		return "", fmt.Errorf("Error getting frequency data: %s", err)
@@ -309,12 +292,7 @@ func generateDetailsTextFieldColumn(db *gorm.DB, tableName models.ClickhouseTabl
         LIMIT 10
     `, columnName, tableName)
 
-	type LengthDistribution struct {
-		StrLength int
-		Count     int64
-	}
-
-	var lengthDist []LengthDistribution
+	var lengthDist []models.LengthDistribution
 	if err := db.Raw(lengthDistSQL).Scan(&lengthDist).Error; err != nil {
 		log.Printf("Error getting length distribution: %v", err)
 		return "", fmt.Errorf("Error getting length distribution: %s", err)
@@ -396,7 +374,7 @@ func GenerateColumnHistogram(db *gorm.DB, tableName models.ClickhouseTableName, 
 	}
 
 	// SQL для получения количества значений в каждом диапазоне
-	var histData []HistogramData
+	var histData []models.HistogramData
 	for i := 0; i < len(borders)-1; i++ {
 		rangeSQL := fmt.Sprintf(`
             SELECT 
@@ -407,7 +385,7 @@ func GenerateColumnHistogram(db *gorm.DB, tableName models.ClickhouseTableName, 
             WHERE %s >= %f AND %s <= %f
         `, borders[i], borders[i+1], tableName, columnName, borders[i], columnName, borders[i+1])
 
-		var rangeData HistogramData
+		var rangeData models.HistogramData
 		if err := db.Raw(rangeSQL).Scan(&rangeData).Error; err != nil {
 			return "", fmt.Errorf("error getting range data: %v", err)
 		}
@@ -417,7 +395,7 @@ func GenerateColumnHistogram(db *gorm.DB, tableName models.ClickhouseTableName, 
 	// return generateSVGHistogram(histData, columnName), nil
 }
 
-func generateSVGHistogram(histData []HistogramData, columnName string) string {
+func generateSVGHistogram(histData []models.HistogramData, columnName string) string {
 	// Параметры SVG
 	width := 800
 	height := 400
@@ -742,33 +720,8 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 
 }
 
-type StringColumnStats struct {
-	TotalRows          int64
-	UniqueValues       int64
-	NullCount          int64
-	EmptyStringCount   int64
-	WhitespaceCount    int64
-	MinLength          int
-	MaxLength          int
-	AvgLength          float64
-	PopularValues      []ValueCount
-	UnpopularValues    []ValueCount
-	LengthDistribution []LengthFrequency
-}
-
-type ValueCount struct {
-	Value   string
-	Count   int64
-	Percent float64
-}
-
-type LengthFrequency struct {
-	Length    int
-	Frequency int64
-}
-
-func analyzeStringColumn(db *gorm.DB, tableName string, columnName string) (*StringColumnStats, error) {
-	stats := &StringColumnStats{}
+func analyzeStringColumn(db *gorm.DB, tableName string, columnName string) (*models.StringColumnStats, error) {
+	stats := &models.StringColumnStats{}
 
 	// Основная статистика
 	basicStatsSQL := fmt.Sprintf(`
@@ -784,18 +737,7 @@ func analyzeStringColumn(db *gorm.DB, tableName string, columnName string) (*Str
         FROM %[2]s
     `, columnName, tableName)
 
-	type BasicStats struct {
-		TotalRows        int64   `db:"total_rows"`
-		UniqueValues     int64   `db:"unique_values"`
-		NullCount        int64   `db:"null_count"`
-		EmptyStringCount int64   `db:"empty_string_count"`
-		WhitespaceCount  int64   `db:"whitespace_count"`
-		MinLength        int     `db:"min_length"`
-		MaxLength        int     `db:"max_length"`
-		AvgLength        float64 `db:"avg_length"`
-	}
-
-	var basicStats BasicStats
+	var basicStats models.BasicStats
 	if err := db.Raw(basicStatsSQL).Scan(&basicStats).Error; err != nil {
 		return nil, fmt.Errorf("error getting basic stats: %v", err)
 	}
