@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"strings"
+
 	"github.com/pivolan/stats_analyzer/config"
+	"github.com/pivolan/stats_analyzer/domain/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"log"
-	"strings"
 )
 
-func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
+func analyzeStatistics(tableName models.ClickhouseTableName) map[string]CommonStat {
 	cfg := config.GetConfig()
 	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
@@ -76,7 +78,7 @@ func analyzeStatistics(tableName ClickhouseTableName) map[string]CommonStat {
 	return r
 }
 
-func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonStat, table ClickhouseTableName) []string {
+func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonStat, table models.ClickhouseTableName) []string {
 	sqls := []string{}
 	groupedColumns := []string{}
 	for _, columnInfo := range columnInfos {
@@ -103,7 +105,7 @@ func generateSqlForGroups(columnInfos []ColumnInfo, uniqInfos map[string]CommonS
 }
 
 // method will find all date fields and generate sql for group by them
-func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table ClickhouseTableName) map[string]string {
+func generateSqlForGroupByDates(columnsInfo []ColumnInfo, table models.ClickhouseTableName) map[string]string {
 	sqls := map[string]string{}
 	for _, columnInfo := range columnsInfo {
 		truncateDatesList := []string{"year", "month", "day"}

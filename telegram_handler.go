@@ -3,10 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pivolan/stats_analyzer/config"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 	"io"
 	"log"
 	"math"
@@ -17,13 +13,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pivolan/stats_analyzer/config"
+	"github.com/pivolan/stats_analyzer/domain/models"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	uuid "github.com/satori/go.uuid"
 )
 
 var toDelete = map[string]time.Time{}
-var currentTable = map[int64]ClickhouseTableName{}
-var toDeleteTable = map[ClickhouseTableName]time.Time{}
+var currentTable = map[int64]models.ClickhouseTableName{}
+var toDeleteTable = map[models.ClickhouseTableName]time.Time{}
 
 // telegram_handler.go
 
@@ -48,44 +50,6 @@ func handleText(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	}
 
 	// Если чисел нет, продолжаем стандартную обработку
-	welcomeText := `Привет! 👋
-
-Я помогу проанализировать ваши данные и создать статистические отчёты. 
-
-Что я умею:
-- Анализирую CSV файлы любого размера
-- Анализирую последовательности чисел (просто отправьте числа в чат)
-- Поддерживаю архивы (gzip, lz4, zip)
-- Создаю подробную статистику по всем колонкам
-- Генерирую графики распределения данных
-- Строю временные ряды и агрегации
-
-Как со мной работать:
-1. Отправьте CSV файл прямо в чат
-2. Или отправьте последовательность чисел для анализа
-3. Или напишите любое сообщение для получения ссылки на веб-загрузку
-
-Примеры отправки чисел:
-- "1 2 3 4 5"
-- "1,2,3,4,5"
-- "1\n2\n3\n4\n5"
-`
-	if message != nil && message.IsCommand() {
-		args := strings.TrimSpace(update.Message.CommandArguments())
-		parts := strings.Split(args, " ")
-		if len(parts) == 1 && parts[0] == "" {
-			parts = []string{}
-		}
-	}
-	switch update.Message.Command() {
-	case "start":
-		msg := tgbotapi.NewMessage(message.Chat.ID, welcomeText)
-
-		_, err := bot.Send(msg)
-		if err != nil {
-			return
-		}
-	}
 
 	uid := uuid.NewV4()
 	users[uid.String()] = message.Chat.ID
@@ -350,7 +314,7 @@ func marshalJSON(v interface{}) string {
 	}
 	return string(b)
 }
-func handleFile(filePath string) (ClickhouseTableName, error) {
+func handleFile(filePath string) (models.ClickhouseTableName, error) {
 	// Unpack archive if necessary
 	unpackedFilePath, err := unpackArchive(filePath)
 	if err != nil {

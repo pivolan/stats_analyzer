@@ -1,5 +1,5 @@
 // package main
-package main
+package plot
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/pivolan/stats_analyzer/domain/models"
 	"github.com/wcharczuk/go-chart/v2"
 	"github.com/wcharczuk/go-chart/v2/drawing"
 	"gorm.io/gorm"
@@ -140,7 +141,7 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 	return buffer.Bytes(), nil
 }
 
-func GenerateHistogram(db *gorm.DB, tableName ClickhouseTableName, columnName string) ([]byte, error, []byte) {
+func GenerateHistogram(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) ([]byte, error, []byte) {
 	// SQL запрос для получения гистограммы
 	histogramSQL := fmt.Sprintf(`
         WITH 
@@ -375,7 +376,7 @@ func DrawBarXString(x []string, y []float64) ([]byte, error) {
 	return buffer.Bytes(), nil
 
 }
-func GenerateHistogramForString(db *gorm.DB, tableName ClickhouseTableName, columnName string) ([]byte, error) {
+func GenerateHistogramForString(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) ([]byte, error) {
 	// SQL для получения категориальных данных с подсчетом
 	categoricalSQL := fmt.Sprintf(`
     SELECT %[1]s as category, 

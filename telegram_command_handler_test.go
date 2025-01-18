@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/pivolan/stats_analyzer/config"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"gorm.io/gorm/logger"
 	"testing"
+
+	"gorm.io/gorm/logger"
 )
 
 func TestGenerateColumnHistogram(t *testing.T) {

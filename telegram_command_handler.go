@@ -11,6 +11,8 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/pivolan/stats_analyzer/config"
+	"github.com/pivolan/stats_analyzer/domain/models"
+	"github.com/pivolan/stats_analyzer/plot"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -64,7 +66,6 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 		handleColumnDates(api, update, columnName)
 	case fullCommand == "start":
 		handleStartCommand(api, update)
-
 	default:
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неизвестная команда. Используйте: /graph<имя_колонки> или /details<имя_колонки>")
 		api.Send(msg)
@@ -161,7 +162,7 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	}
 
 	// Generate bar chart
-	graphData, err := DrawTimeSeries(xValues, yValues)
+	graphData, err := plot.DrawTimeSeries(xValues, yValues)
 	if err != nil {
 		log.Printf("Error generating time series plot: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
@@ -216,9 +217,9 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	statsMsg1, err := GenerateHistogramForString(db, tableName, columnName)
+	statsMsg1, err := plot.GenerateHistogramForString(db, tableName, columnName)
 	if err != nil {
-		log.Printf("#############################Error generating plot: %v", err)
+		log.Printf("Error generating plot: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
 		api.Send(msg)
 		return
@@ -231,7 +232,7 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 
 }
 
-func generateDetailsTextFieldColumn(db *gorm.DB, tableName ClickhouseTableName, columnName string) (string, error) {
+func generateDetailsTextFieldColumn(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) (string, error) {
 
 	// SQL для получения основной статистики строковых значений
 	statsSQL := fmt.Sprintf(`
@@ -362,7 +363,7 @@ func generateDetailsTextFieldColumn(db *gorm.DB, tableName ClickhouseTableName, 
 		strings.Join(lengthDistStr, "\n"))
 	return statsMsg, nil
 }
-func GenerateColumnHistogram(db *gorm.DB, tableName ClickhouseTableName, columnName string) (string, error) {
+func GenerateColumnHistogram(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) (string, error) {
 	// SQL для получения квантилей
 	quantileSQL := fmt.Sprintf(`
         SELECT quantiles(0.01,0.05, 0.1, 0.5, 
@@ -685,7 +686,7 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	// 	return
 	// }
 
-	pngData, err, pngData2 := GenerateHistogram(db, tableName, columnName)
+	pngData, err, pngData2 := plot.GenerateHistogram(db, tableName, columnName)
 	if err != nil {
 		log.Printf("Error generating plot: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
@@ -894,15 +895,14 @@ func sendChartFromColumn(graph []byte, name, columnName string, chatId int64, ap
 }
 func handleStartCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	message := update.Message
-	if message != nil && message.IsCommand() {
 
-		f, err := os.ReadFile("welcome.xml")
+	f, err := os.ReadFile("welcome.xml")
 
-		if err != nil {
-			log.Printf("[Error] open welcome file: %v", err)
-		}
-		msg := tgbotapi.NewMessage(message.Chat.ID, string(f))
-		api.Send(msg)
-		return
+	if err != nil {
+		log.Printf("[Error] open welcome file: %v", err)
 	}
+	msg := tgbotapi.NewMessage(message.Chat.ID, string(f))
+	api.Send(msg)
+	return
+
 }

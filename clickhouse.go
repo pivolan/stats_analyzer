@@ -6,10 +6,6 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
-	"github.com/mozillazg/go-unidecode"
-	"github.com/pivolan/go_utils"
-	uuid "github.com/satori/go.uuid"
-	"gorm.io/gorm"
 	"io"
 	"log"
 	"math"
@@ -20,12 +16,17 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mozillazg/go-unidecode"
+	"github.com/pivolan/go_utils"
+	"github.com/pivolan/stats_analyzer/domain/models"
+	uuid "github.com/satori/go.uuid"
+	"gorm.io/gorm"
 )
 
 type DBInterface interface {
 	Exec(query string, values ...interface{}) *gorm.DB
 }
-type ClickhouseTableName string
 
 var getMD5String = func(input string) string {
 	prefix := uuid.NewV4().String()[:6]
@@ -178,7 +179,7 @@ func removeBOM(row []string) []string {
 	return row
 }
 
-func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableName, error) {
+func importDataIntoClickHouse(filePath string, db DBInterface) (models.ClickhouseTableName, error) {
 	delimiter, err := detectDelimiter(filePath)
 	if err != nil {
 		log.Println(fmt.Errorf("error detecting delimiter: %v", err))
@@ -394,7 +395,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (ClickhouseTableN
 		}
 	}
 
-	return ClickhouseTableName(tableName), nil
+	return models.ClickhouseTableName(tableName), nil
 }
 
 // Вспомогательная функция для определения минимального значения
@@ -410,7 +411,7 @@ type ColumnInfo struct {
 	Type string //Date DateTime64 Int64 Float64
 }
 
-func getColumnAndTypeList(db *gorm.DB, tableName ClickhouseTableName) ([]ColumnInfo, error) {
+func getColumnAndTypeList(db *gorm.DB, tableName models.ClickhouseTableName) ([]ColumnInfo, error) {
 	query := fmt.Sprintf("DESCRIBE TABLE %s", tableName)
 	tx := db.Raw(query)
 	if tx.Error != nil {
@@ -625,7 +626,7 @@ func setZeroFields(a *CommonStat, b CommonStat) {
 func excludeColumn(name string) bool {
 	return go_utils.InArray(name, []string{"id", "slug"})
 }
-func generateSqlForUniqCounts(columns []ColumnInfo, table ClickhouseTableName) (sql string) {
+func generateSqlForUniqCounts(columns []ColumnInfo, table models.ClickhouseTableName) (sql string) {
 	fields := []string{}
 	method := "uniq"
 	for _, column := range columns {
@@ -639,11 +640,11 @@ func generateSqlForUniqCounts(columns []ColumnInfo, table ClickhouseTableName) (
 	}
 	return "SELECT " + strings.Join(fields, ",") + " FROM " + string(table)
 }
-func generateSqlForCount(columns []ColumnInfo, table ClickhouseTableName) (sql string) {
+func generateSqlForCount(columns []ColumnInfo, table models.ClickhouseTableName) (sql string) {
 	return "SELECT count() FROM " + string(table)
 }
 
-func generateSqlForNumericColumnsStats(columns []ColumnInfo, table ClickhouseTableName) (sql string) {
+func generateSqlForNumericColumnsStats(columns []ColumnInfo, table models.ClickhouseTableName) (sql string) {
 	statMethods := []string{"quantile(0.01)", "quantile(0.99)", "quantile(0.1)", "quantile(0.9)", "median", "avg", "max", "min"}
 	fields := columnAggregatesSelectSqlGenerator(columns, statMethods)
 	return "SELECT " + strings.Join(fields, ",") + " FROM " + string(table)
