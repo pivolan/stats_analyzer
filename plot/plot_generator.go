@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"time"
 
 	"github.com/pivolan/stats_analyzer/domain/models"
@@ -15,46 +16,92 @@ import (
 )
 
 func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
-	// Convert Unix timestamps to Time objects
-	timeValues := make([]time.Time, len(xValues))
-	for i, x := range xValues {
-		timeValues[i] = time.Unix(int64(x), 0)
-	}
 
-	// Create bars for each time point
+	var ticks []chart.Tick
+
 	var bars []chart.Value
-	for i := 0; i < len(timeValues); i++ {
+	maxVal := 0.0
+
+	for i := 0; i < len(xValues); i++ {
+		if yValues[i] > maxVal {
+			maxVal = yValues[i]
+		}
+		t := time.Unix(int64(xValues[i]), 0)
+
 		bars = append(bars, chart.Value{
 			Value: yValues[i],
-			Label: timeValues[i].Format("2006-01-02 15:04"), // Format time as needed
+			Style: chart.Style{FillColor: drawing.ColorLime.WithAlpha(40)},
+			Label: fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month(), t.Day()),
 		})
 	}
+	maxY := findMaxValue(yValues)
+	gridStep := calculateGridStep(maxY)
+	width, height := calculateChartDimensions(yValues, len(xValues), 120, 350)
+	for i := 0.0; i <= maxY; i += gridStep {
+		ticks = append(ticks, chart.Tick{
+			Value: i,
+			Label: fmt.Sprintf("%.1f", i),
+		})
+	}
+	// Настраиваем внешний вид графика
+	bar := chart.BarChart{
+		Title:      "",
+		TitleStyle: chart.Style{Hidden: true},
 
-	// Configure the graph
-	graph := chart.BarChart{
-		Title: "Time Series Distribution",
 		Background: chart.Style{
-			FillColor:   drawing.ColorWhite,
-			StrokeColor: drawing.ColorBlue,
-		},
-		Height:   1024,
-		Width:    2028,
-		BarWidth: 30,
+
+			Padding: chart.Box{
+				Top: 40,
+
+				Bottom: 40,
+			}},
+		Height: height,
+		Width:  width,
+
+		BarWidth: 45, // Уменьшаем ширину баров
 		Bars:     bars,
+		XAxis: chart.Style{
+			StrokeWidth: 2, // Толщина линии
+			StrokeColor: chart.ColorBlack,
+		},
 		YAxis: chart.YAxis{
 			Name: "Count",
+			Range: &chart.ContinuousRange{
+				Min: 0.0,
+				Max: maxY,
+			},
+
+			Style: chart.Style{
+
+				StrokeWidth: 2, // Толщина линии
+				StrokeColor: chart.ColorBlack,
+			},
+
+			Ticks: ticks,
+			GridMinorStyle: chart.Style{
+				StrokeColor: chart.ColorBlack,
+				StrokeWidth: 1,
+				DotWidth:    1,
+			},
+			GridMajorStyle: chart.Style{
+				StrokeColor:     chart.ColorBlack,
+				StrokeWidth:     1,
+				DotWidth:        1,
+				StrokeDashArray: []float64{5.0, 5.0}, // Пунктирная линия
+			},
 		},
 	}
-
-	// Add grid lines
-	graph.Background.StrokeWidth = 1
-	graph.Background.StrokeColor = drawing.ColorFromHex("efefef")
-
-	// Create buffer and render
+	// Надо не забыть убрать  перед деплоем!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	f, _ := os.Create("dynamic_grid.png")
+	defer f.Close()
+	bar.Render(chart.PNG, f)
+	// Создаем буфер для записи изображения
 	buffer := bytes.NewBuffer([]byte{})
-	err := graph.Render(chart.PNG, buffer)
+
+	// Отрисовываем график в формате PNG
+	err := bar.Render(chart.PNG, buffer)
 	if err != nil {
-		return nil, fmt.Errorf("error rendering time series chart: %v", err)
+		return nil, fmt.Errorf("error rendering chart: %v", err)
 	}
 
 	return buffer.Bytes(), nil
@@ -95,7 +142,7 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 			}},
 		Height:   height,
 		Width:    width,
-		BarWidth: 30, // Уменьшаем ширину баров
+		BarWidth: 45, // Уменьшаем ширину баров
 		Bars:     bars,
 		XAxis: chart.Style{
 			StrokeWidth: 2, // Толщина линии
@@ -415,48 +462,117 @@ func GenerateHistogramForString(db *gorm.DB, tableName models.ClickhouseTableNam
 }
 
 func calculateGridStep(maxValue float64) float64 {
+	// Проверка на корректность входного значения
+	if maxValue <= 0 {
+		return 0
+	}
+
+	// Обработка очень маленьких чисел
+	if maxValue < 1e-10 {
+		return 1e-10
+	}
+
 	// Находим порядок величины максимального значения
 	magnitude := math.Pow(10, math.Floor(math.Log10(maxValue)))
 
+	// Нормализуем значение к диапазону [1, 10)
 	normalized := maxValue / magnitude
 
-	// Выбираем базовый шаг в зависимости от нормализованного значения
+	// Определяем базовые шаги для разных диапазонов
+	// Для больших чисел используем более крупные шаги
 	var step float64
 	switch {
-	case normalized <= 1:
-		step = 0.2
-	case normalized <= 2:
-		step = 0.5
-	case normalized <= 5:
-		step = 1.0
+	case magnitude >= 1000:
+		// Для значений >= 1000 используем шаги по 1000, 2000, 5000
+		switch {
+		case normalized <= 1:
+			step = 0.2 // даст шаг 200 для тысяч
+		case normalized <= 2:
+			step = 0.5 // даст шаг 500 для тысяч
+		case normalized <= 5:
+			step = 1.0 // даст шаг 1000 для тысяч
+		default:
+			step = 2.0 // даст шаг 2000 для тысяч
+		}
+	case magnitude >= 100:
+		// Для значений >= 100 используем шаги по 100, 200, 500
+		switch {
+		case normalized <= 1:
+			step = 0.2
+		case normalized <= 2:
+			step = 0.5
+		case normalized <= 5:
+			step = 1.0
+		default:
+			step = 2.0
+		}
 	default:
-		step = 2.0
+		// Для меньших значений используем стандартные шаги
+		switch {
+		case normalized <= 1:
+			step = 0.2
+		case normalized <= 2:
+			step = 0.5
+		case normalized <= 5:
+			step = 1.0
+		default:
+			step = 2.0
+		}
 	}
 
-	return step * magnitude
-}
+	// Возвращаем окончательный шаг с учетом порядка величины
+	finalStep := step * magnitude
 
+	// Округляем большие шаги до "красивых" чисел
+	if finalStep >= 1000 {
+		// Округляем до сотен для тысяч
+		return math.Round(finalStep/100) * 100
+	}
+	if finalStep >= 100 {
+		// Округляем до десятков для сотен
+		return math.Round(finalStep/10) * 10
+	}
+
+	return finalStep
+}
 func calculateChartDimensions(values []float64, numBars int, minBarWidth, minHeight float64) (width, height int) {
-	// Найдем максимальное значение для высоты
+	// Проверка входных параметров
+	if len(values) == 0 || numBars <= 0 || minBarWidth <= 0 {
+		return 0, 0
+	}
+	if len(values) < 10 {
+		return 600, 400
+	}
+	// Находим максимальное значение для высоты
 	max := findMaxValue(values)
+	if max <= 0 {
+		return 0, 0
+	}
+
+	// Константы для отступов и пропорций
+	const (
+		paddingY     = 100        // отступ для оси Y и подписей
+		spacingRatio = 0.2        // соотношение отступа между столбцами к ширине столбца
+		heightRatio  = 1.2        // коэффициент для добавления пространства сверху графика
+		aspectRatio  = 16.0 / 9.0 // соотношение сторон по умолчанию
+	)
 
 	// Рассчитываем ширину
-
-	// Добавляем отступы между столбцами (20% от ширины столбца)
-	barSpacing := minBarWidth * 0.2
+	barSpacing := minBarWidth * spacingRatio
 	totalWidth := (minBarWidth+barSpacing)*float64(numBars) + barSpacing
-
-	// Добавляем отступы для осей и подписей
-	width = int(totalWidth) + 100 // дополнительное место для оси Y и подписей
+	width = int(totalWidth) + paddingY
 
 	// Рассчитываем высоту
-	// Используем соотношение 16:9 если не задано минимальное значение
+	calculatedHeight := max * heightRatio
 	if minHeight <= 0 {
-		minHeight = totalWidth * 9.0 / 16.0
+		minHeight = totalWidth / aspectRatio
 	}
 
+	// Используем большее значение из минимальной и расчётной высоты
+	targetHeight := math.Max(minHeight, calculatedHeight)
+
 	// Округляем высоту до ближайшего большего числа, кратного 50
-	height = int(math.Ceil(math.Max(minHeight, max*1.2)/50.0) * 50)
+	height = int(math.Ceil(targetHeight/50.0) * 50)
 
 	return width, height
 }

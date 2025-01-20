@@ -57,7 +57,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 			api.Send(msg)
 			return
 		}
-		handleColumnDates(api, update, columnName)
+		handleDateSumStats(api, update, columnName)
 	case fullCommand == "start":
 		handleStartCommand(api, update)
 	default:
@@ -135,23 +135,51 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		return
 	}
 
-	// Prepare data for visualization
-	xValues := make([]float64, len(dateCounts))
-	yValues := make([]float64, len(dateCounts))
-
-	// Convert dates to timestamps for visualization
+	// Добавляем отладочный вывод
+	log.Printf("Raw SQL query: %s", dateSQL)
+	log.Printf("Number of results: %d", len(dateCounts))
 	for i, dc := range dateCounts {
-		t, err := time.Parse("2006-01-02 15:04:05", dc.Date)
-		if err != nil {
-			log.Printf("Error parsing date %s: %v", dc.Date, err)
-			continue
-		}
-		xValues[i] = float64(t.Unix())
-		yValues[i] = dc.Count
+		log.Printf("Row %d: date = %s, count = %d", i, dc.Date, dc.Count)
 	}
 
-	// Generate bar chart
+	// Также проверим значения после парсинга
+	xValues := make([]float64, 0, len(dateCounts))
+	yValues := make([]float64, 0, len(dateCounts))
+
+	const (
+		fullDateTimeFormat = "2006-01-02 15:04:05"
+		dateOnlyFormat     = "2006-01-02"
+	)
+
+	for i, dc := range dateCounts {
+		var t time.Time
+		var err error
+
+		t, err = time.Parse(fullDateTimeFormat, dc.Date)
+		if err != nil {
+			t, err = time.Parse(dateOnlyFormat, dc.Date)
+			if err != nil {
+				log.Printf("Error parsing date %s: %v", dc.Date, err)
+				continue
+			}
+		}
+
+		timestamp := float64(t.Unix())
+		log.Printf("Parsed Row %d: original = %s, timestamp = %f, human readable = %s",
+			i, dc.Date, timestamp, time.Unix(int64(timestamp), 0).Format("2006-01-02 15:04:05"))
+
+		xValues = append(xValues, timestamp)
+		yValues = append(yValues, float64(dc.Count))
+	}
+
+	if len(xValues) < 2 {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Недостаточно данных для построения графика (нужно минимум 2 точки)")
+		api.Send(msg)
+		return
+	}
+
 	graphData, err := plot.DrawTimeSeries(xValues, yValues)
+
 	if err != nil {
 		log.Printf("Error generating time series plot: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
@@ -847,4 +875,181 @@ func handleStartCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	api.Send(msg)
 	return
 
+}
+
+func handleDateSumStats(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
+	tableName, exists := currentTable[update.Message.Chat.ID]
+	if !exists {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Сначала выберите таблицу")
+		api.Send(msg)
+		return
+	}
+
+	parts := strings.Split(columnName, "__")
+	if len(parts) != 2 {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неверный формат имени колонки. Ожидается: field__timeunit")
+		api.Send(msg)
+		return
+	}
+
+	baseField := parts[0]
+	timeUnit := parts[1]
+
+	cfg := config.GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+	if err != nil {
+		log.Printf("Error connecting to database: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка подключения к базе данных")
+		api.Send(msg)
+		return
+	}
+
+	// Формируем SQL с использованием toString для дат
+	var dateGroupSQL string
+	switch timeUnit {
+	case "day":
+		dateGroupSQL = fmt.Sprintf(`
+            SELECT 
+                toString(toDate(%[1]s)) as date,
+                count(*) as count
+            FROM %[2]s
+            WHERE %[1]s IS NOT NULL
+            GROUP BY toDate(%[1]s)
+            ORDER BY toDate(%[1]s)
+        `, baseField, tableName)
+	case "month":
+		dateGroupSQL = fmt.Sprintf(`
+            SELECT 
+                toString(toStartOfMonth(%[1]s)) as date,
+                count(*) as count
+            FROM %[2]s
+            WHERE %[1]s IS NOT NULL
+            GROUP BY toStartOfMonth(%[1]s)
+            ORDER BY toStartOfMonth(%[1]s)
+        `, baseField, tableName)
+	case "year":
+		dateGroupSQL = fmt.Sprintf(`
+            SELECT 
+                toString(toStartOfYear(%[1]s)) as date,
+                count(*) as count
+            FROM %[2]s
+            WHERE %[1]s IS NOT NULL
+            GROUP BY toStartOfYear(%[1]s)
+            ORDER BY toStartOfYear(%[1]s)
+        `, baseField, tableName)
+	default:
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неподдерживаемая единица времени. Используйте: day, month или year")
+		api.Send(msg)
+		return
+	}
+
+	log.Printf("Executing query: %s", dateGroupSQL)
+
+	// Структура для сканирования строковой даты
+	var results []struct {
+		Date  string `json:"date"`
+		Count int64  `json:"count"`
+	}
+
+	if err := db.Raw(dateGroupSQL).Scan(&results).Error; err != nil {
+		log.Printf("Error executing query: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка выполнения запроса")
+		api.Send(msg)
+		return
+	}
+
+	if len(results) == 0 {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Нет данных для анализа")
+		api.Send(msg)
+		return
+	}
+
+	// Подготовка данных для графика
+	xValues := make([]float64, len(results))
+	yValues := make([]float64, len(results))
+
+	var totalCount int64
+	var maxCount int64
+	var maxDate string
+	var minCount = results[0].Count
+	var minDate = results[0].Date
+
+	for i, r := range results {
+		// Парсим дату из строки
+		t, err := time.Parse("2006-01-02", r.Date)
+		if err != nil {
+			log.Printf("Error parsing date %s: %v", r.Date, err)
+			continue
+		}
+
+		xValues[i] = float64(t.Unix())
+		yValues[i] = float64(r.Count)
+
+		totalCount += r.Count
+		if r.Count > maxCount {
+			maxCount = r.Count
+			maxDate = r.Date
+		}
+		if r.Count < minCount {
+			minCount = r.Count
+			minDate = r.Date
+		}
+	}
+
+	avgCount := float64(totalCount) / float64(len(results))
+
+	// Создаем сообщение со статистикой
+	statsMsg := fmt.Sprintf(
+		"Статистика по %s (группировка: %s):\n\n"+
+			"Общая информация:\n"+
+			"• Всего записей: %d\n"+
+			"• Количество периодов: %d\n"+
+			"• Среднее количество в период: %.2f\n\n"+
+			"Максимум:\n"+
+			"• Дата: %s\n"+
+			"• Количество: %d\n\n"+
+			"Минимум:\n"+
+			"• Дата: %s\n"+
+			"• Количество: %d\n\n"+
+			"Период анализа:\n"+
+			"• С %s по %s",
+		baseField, timeUnit,
+		totalCount,
+		len(results),
+		avgCount,
+		maxDate,
+		maxCount,
+		minDate,
+		minCount,
+		results[0].Date,
+		results[len(results)-1].Date,
+	)
+
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
+	api.Send(msg)
+
+	// Генерируем и отправляем график
+	graphData, err := plot.DrawTimeSeries(xValues, yValues)
+	if err != nil {
+		log.Printf("Error generating plot: %v", err)
+		errMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
+		api.Send(errMsg)
+		return
+	}
+
+	sendGraphVisualization(graphData, "timeseries", fmt.Sprintf("%s_%s", baseField, timeUnit),
+		update.Message.Chat.ID, api, timeUnit)
+}
+func sumCounts(results []struct {
+	Date     time.Time `json:"date"`
+	Count    int64     `json:"count"`
+	DailySum float64   `json:"daily_sum"`
+}) int64 {
+	var total int64
+	for _, r := range results {
+		total += r.Count
+	}
+	return total
 }

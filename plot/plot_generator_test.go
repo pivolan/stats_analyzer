@@ -206,3 +206,6 @@ func TestBabas(t *testing.T) {
 }
 
 // Функция для расчета оптимального шага сетки
+func TestDrawDate(t *testing.T) {
+
+}
