@@ -29,12 +29,49 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 		Bytes: graph,
 	}
 
+	//176352
+	//203362
+	//150000
 	// Создаем сообщение с изображением
-	docMsg := tgbotapi.NewPhotoUpload(chatID, pngFile)
+	var maxSizePhoto = 150000
 
-	// Формируем поясняющий текст в зависимости от типа визуализации
+	switch {
+	case maxSizePhoto > len(graph):
+		docMsg := tgbotapi.NewPhotoUpload(chatID, pngFile)
+		docMsg.Caption = generateVizualDescription(visualType, columnName, timeUnit...)
+
+		_, err := api.Send(docMsg)
+		if err != nil {
+			log.Printf("Ошибка отправки визуализации %s для колонки %s: %v",
+				visualType, columnName, err)
+			errMsg := tgbotapi.NewMessage(chatID,
+				fmt.Sprintf("Не удалось отправить визуализацию %s. Ошибка: %v",
+					visualType, err))
+			api.Send(errMsg)
+			return
+
+		}
+	case maxSizePhoto < len(graph):
+		docMsg := tgbotapi.NewDocumentUpload(chatID, pngFile)
+		docMsg.Caption = generateVizualDescription(visualType, columnName, timeUnit...)
+
+		_, err := api.Send(docMsg)
+		if err != nil {
+			log.Printf("Ошибка отправки визуализации %s для колонки %s: %v",
+				visualType, columnName, err)
+			errMsg := tgbotapi.NewMessage(chatID,
+				fmt.Sprintf("Не удалось отправить визуализацию %s. Ошибка: %v",
+					visualType, err))
+			api.Send(errMsg)
+			return
+		}
+	}
+
+}
+
+func generateVizualDescription(description, columnName string, timeUnit ...string) string {
 	var caption string
-	switch visualType {
+	switch description {
 	case "histogram":
 		caption = fmt.Sprintf("Гистограмма распределения значений: %s\n"+
 			"Показывает частоту встречаемости различных значений в данных.",
@@ -54,18 +91,5 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 	default:
 		caption = fmt.Sprintf("Визуализация данных: %s", columnName)
 	}
-
-	docMsg.Caption = caption
-
-	// Отправляем сообщение с изображением
-	_, err := api.Send(docMsg)
-	if err != nil {
-		log.Printf("Ошибка отправки визуализации %s для колонки %s: %v",
-			visualType, columnName, err)
-		errMsg := tgbotapi.NewMessage(chatID,
-			fmt.Sprintf("Не удалось отправить визуализацию %s. Ошибка: %v",
-				visualType, err))
-		api.Send(errMsg)
-		return
-	}
+	return caption
 }

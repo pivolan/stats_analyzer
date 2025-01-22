@@ -36,7 +36,7 @@ func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
 	}
 	maxY := findMaxValue(yValues)
 	gridStep := calculateGridStep(maxY)
-	width, height := calculateChartDimensions(yValues, len(xValues), 120, 350)
+	width, height := calculateChartDimensions(yValues, len(xValues), 70)
 	for i := 0.0; i <= maxY; i += gridStep {
 		ticks = append(ticks, chart.Tick{
 			Value: i,
@@ -53,16 +53,17 @@ func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
 			Padding: chart.Box{
 				Top: 40,
 
-				Bottom: 40,
+				Bottom: 100,
 			}},
 		Height: height,
 		Width:  width,
 
-		BarWidth: 45, // Уменьшаем ширину баров
+		BarWidth: 60, // Уменьшаем ширину баров
 		Bars:     bars,
 		XAxis: chart.Style{
-			StrokeWidth: 2, // Толщина линии
-			StrokeColor: chart.ColorBlack,
+			StrokeWidth:         2, // Толщина линии
+			StrokeColor:         chart.ColorBlack,
+			TextRotationDegrees: 80,
 		},
 		YAxis: chart.YAxis{
 			Name: "Count",
@@ -119,17 +120,20 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 		bars = append(bars, chart.Value{
 			Value: yValues[i],
 			Label: fmt.Sprintf("%.f-%.f", xStart[i], xEnd[i]), // Округляем до 1 знака после запятой
-
+			Style: chart.Style{
+				FillColor: drawing.ColorPurple.WithAlpha(100),
+			},
 		})
 	}
 	maxY := findMaxValue(yValues)
 	gridStep := calculateGridStep(maxY)
-	width, height := calculateChartDimensions(yValues, len(xStart), 60, 400)
+	width, height := calculateChartDimensions(yValues, len(xStart), 60)
 	for i := 0.0; i <= maxY; i += gridStep {
 		ticks = append(ticks, chart.Tick{
 			Value: i,
 			Label: fmt.Sprintf("%.1f", i),
 		})
+
 	}
 	// Настраиваем внешний вид графика
 	bar := chart.BarChart{
@@ -346,7 +350,7 @@ func DrawDensityPlot(xValues []float64, yValues []float64) ([]byte, error) {
 func DrawBarXString(x []string, y []float64) ([]byte, error) {
 	var bars chart.Values
 	var ticks []chart.Tick
-	width, Height := calculateChartDimensions(y, len(x), 60, 360)
+	width, _ := calculateChartDimensions(y, len(x), 70)
 	maxValue := findMaxValue(y)
 	gridStep := calculateGridStep(maxValue)
 	maxY := math.Ceil(maxValue/gridStep) * gridStep
@@ -361,6 +365,9 @@ func DrawBarXString(x []string, y []float64) ([]byte, error) {
 		bars = append(bars, chart.Value{
 			Label: x[i],
 			Value: y[i],
+			Style: chart.Style{
+				FillColor: drawing.ColorSilver.WithAlpha(120),
+			},
 		})
 
 	}
@@ -372,15 +379,18 @@ func DrawBarXString(x []string, y []float64) ([]byte, error) {
 		Background: chart.Style{
 
 			Padding: chart.Box{
-				Top: 40,
+				Top:    40,
+				Bottom: 200,
 			}},
-		Height:   Height,
+		Height:   2048,
 		Width:    width,
-		BarWidth: 30, // Уменьшаем ширину баров
+		BarWidth: 60, // Уменьшаем ширину баров
 		Bars:     bars,
 		XAxis: chart.Style{
-			StrokeWidth: 2, // Толщина линии
-			StrokeColor: chart.ColorBlack,
+
+			StrokeWidth:         2, // Толщина линии
+			StrokeColor:         chart.ColorBlack,
+			TextRotationDegrees: 85,
 		},
 		YAxis: chart.YAxis{
 			Name: "Frequency",
@@ -413,9 +423,14 @@ func DrawBarXString(x []string, y []float64) ([]byte, error) {
 
 	// Создаем буфер для записи изображения
 	buffer := bytes.NewBuffer([]byte{})
-
+	f, err := os.Create("ssssssssssss.png")
+	if err != nil {
+		fmt.Errorf("####,%v", err)
+	}
+	defer f.Close()
 	// Отрисовываем график в формате PNG
-	err := bar.Render(chart.PNG, buffer)
+	err = bar.Render(chart.PNG, buffer)
+	err = bar.Render(chart.PNG, f)
 	if err != nil {
 		return nil, fmt.Errorf(" error rendering chart: %v", err)
 	}
@@ -535,7 +550,7 @@ func calculateGridStep(maxValue float64) float64 {
 
 	return finalStep
 }
-func calculateChartDimensions(values []float64, numBars int, minBarWidth, minHeight float64) (width, height int) {
+func calculateChartDimensions(values []float64, numBars int, minBarWidth float64) (width, height int) {
 	// Проверка входных параметров
 	if len(values) == 0 || numBars <= 0 || minBarWidth <= 0 {
 		return 0, 0
@@ -548,12 +563,14 @@ func calculateChartDimensions(values []float64, numBars int, minBarWidth, minHei
 	if max <= 0 {
 		return 0, 0
 	}
-
+	if max < 600 {
+		max = 800
+	}
 	// Константы для отступов и пропорций
 	const (
 		paddingY     = 100        // отступ для оси Y и подписей
 		spacingRatio = 0.2        // соотношение отступа между столбцами к ширине столбца
-		heightRatio  = 1.2        // коэффициент для добавления пространства сверху графика
+		heightRatio  = 0.4        // коэффициент для добавления пространства сверху графика
 		aspectRatio  = 16.0 / 9.0 // соотношение сторон по умолчанию
 	)
 
@@ -561,19 +578,7 @@ func calculateChartDimensions(values []float64, numBars int, minBarWidth, minHei
 	barSpacing := minBarWidth * spacingRatio
 	totalWidth := (minBarWidth+barSpacing)*float64(numBars) + barSpacing
 	width = int(totalWidth) + paddingY
-
-	// Рассчитываем высоту
-	calculatedHeight := max * heightRatio
-	if minHeight <= 0 {
-		minHeight = totalWidth / aspectRatio
-	}
-
-	// Используем большее значение из минимальной и расчётной высоты
-	targetHeight := math.Max(minHeight, calculatedHeight)
-
-	// Округляем высоту до ближайшего большего числа, кратного 50
-	height = int(math.Ceil(targetHeight/50.0) * 50)
-
+	height = int(max * 1.5)
 	return width, height
 }
 func findMaxValue(values []float64) float64 {

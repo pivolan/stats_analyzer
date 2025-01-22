@@ -203,7 +203,6 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
 	api.Send(msg)
 
-	// Send visualization
 	sendGraphVisualization(graphData, "timeseries", columnName, update.Message.Chat.ID, api, timeUnit)
 }
 
@@ -241,11 +240,15 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	sendChartFromColumn(statsMsg1, "histForString", columnName, update.Message.Chat.ID, api)
-
-	statsMsg, err := generateDetailsTextFieldColumn(db, tableName, columnName)
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
-	api.Send(msg)
+	statsMsg2, err := analyzeNumericData(db, tableName)
+	if err != nil {
+		log.Printf("Error generating plot: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
+		api.Send(msg)
+		return
+	}
+	sendGraphVisualization(statsMsg2, "histForString1", columnName, update.Message.Chat.ID, api)
+	sendGraphVisualization(statsMsg1, "histForString", columnName, update.Message.Chat.ID, api)
 
 }
 
@@ -684,13 +687,6 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		xValues[i] = (prevBorder + borderValue) / 2
 		yValues[i] = float64(rangeCount.Count)
 	}
-	// pngData, err := DrawPlot(xValues, yValues)
-	// if err != nil {
-	// 	log.Printf("Error generating plot: %v", err)
-	// 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
-	// 	api.Send(msg)
-	// 	return
-	// }
 
 	pngData, err, pngData2 := plot.GenerateHistogram(db, tableName, columnName)
 	if err != nil {
@@ -742,9 +738,8 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	api.Send(msg)
 
 	// Отправляем график
-
-	sendChartFromColumn(pngData, "histogram", columnName, update.Message.Chat.ID, api)
-	sendChartFromColumn(pngData2, "Density", columnName, update.Message.Chat.ID, api)
+	sendGraphVisualization(pngData, "histogram", columnName, update.Message.Chat.ID, api)
+	sendGraphVisualization(pngData2, "Density", columnName, update.Message.Chat.ID, api)
 
 }
 
@@ -843,26 +838,6 @@ func analyzeStringColumn(db *gorm.DB, tableName string, columnName string) (*mod
 	return stats, nil
 }
 
-func sendChartFromColumn(graph []byte, name, columnName string, chatId int64, api *tgbotapi.BotAPI) {
-	fileName := fmt.Sprintf("%s_%s_%s.png",
-		name, columnName,
-		time.Now().Format("20060102-150405"))
-	pngFile := tgbotapi.FileBytes{
-		Name:  fileName,
-		Bytes: graph,
-	}
-
-	docMsg := tgbotapi.NewPhotoUpload(chatId, pngFile)
-	docMsg.Caption = fmt.Sprintf("Распределение значений: %s", columnName)
-
-	_, err := api.Send(docMsg)
-	if err != nil {
-		log.Printf("Error sending PNG: %v", err)
-		msg := tgbotapi.NewMessage(chatId, "Ошибка отправки графика")
-		api.Send(msg)
-		return
-	}
-}
 func handleStartCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	message := update.Message
 
@@ -1042,14 +1017,102 @@ func handleDateSumStats(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName
 	sendGraphVisualization(graphData, "timeseries", fmt.Sprintf("%s_%s", baseField, timeUnit),
 		update.Message.Chat.ID, api, timeUnit)
 }
-func sumCounts(results []struct {
-	Date     time.Time `json:"date"`
-	Count    int64     `json:"count"`
-	DailySum float64   `json:"daily_sum"`
-}) int64 {
-	var total int64
-	for _, r := range results {
-		total += r.Count
+
+func analyzeNumericData(db *gorm.DB, tableName models.ClickhouseTableName) ([]byte, error) {
+	// Получаем информацию о структуре таблицы, исключая первую колонку (обычно id)
+	tableInfoSQL := fmt.Sprintf(`
+        SELECT 
+            name,
+            type,
+            position
+        FROM system.columns 
+        WHERE table = '%s'
+        AND position > 1  -- пропускаем первую колонку (обычно id)
+        AND (type LIKE '%%Int%%' OR type LIKE '%%Float%%')
+        ORDER BY position
+        LIMIT 1
+    `, tableName)
+
+	type ColumnInfo struct {
+		Name     string
+		Type     string
+		Position int
 	}
-	return total
+
+	var numericColumn ColumnInfo
+	if err := db.Raw(tableInfoSQL).Scan(&numericColumn).Error; err != nil {
+		return nil, fmt.Errorf("error finding numeric column: %v", err)
+	}
+
+	if numericColumn.Name == "" {
+		return nil, fmt.Errorf("no numeric columns found")
+	}
+
+	log.Printf("Found numeric column: %s (%s) at position %d",
+		numericColumn.Name, numericColumn.Type, numericColumn.Position)
+
+	// Находим первое строковое поле для группировки (исключая поле с датой)
+	findGroupColumnSQL := fmt.Sprintf(`
+        SELECT 
+            name,
+            type,
+            position
+        FROM system.columns 
+        WHERE table = '%s'
+        AND type LIKE '%%String%%'
+        AND position > 1
+        AND name NOT LIKE '%%date%%'
+        ORDER BY position
+        LIMIT 1
+    `, tableName)
+
+	var groupColumn ColumnInfo
+	if err := db.Raw(findGroupColumnSQL).Scan(&groupColumn).Error; err != nil {
+		return nil, fmt.Errorf("error finding group column: %v", err)
+	}
+
+	if groupColumn.Name == "" {
+		return nil, fmt.Errorf("no string columns found for grouping")
+	}
+
+	log.Printf("Using group column: %s (%s)", groupColumn.Name, groupColumn.Type)
+
+	// Выполняем агрегацию
+	aggregateSQL := fmt.Sprintf(`
+        SELECT 
+            %s as category,
+            sum(%s) as total
+        FROM %s
+        WHERE %s IS NOT NULL
+        GROUP BY %s
+        ORDER BY total DESC
+    `, groupColumn.Name, numericColumn.Name, tableName, groupColumn.Name, groupColumn.Name)
+
+	type Result struct {
+		Category string
+		Total    int64
+	}
+
+	var results []Result
+	if err := db.Raw(aggregateSQL).Scan(&results).Error; err != nil {
+		return nil, fmt.Errorf("error aggregating data: %v", err)
+	}
+
+	log.Printf("Found %d aggregated results", len(results))
+
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no data found after aggregation")
+	}
+
+	// Готовим данные для графика
+	categories := make([]string, len(results))
+	values := make([]float64, len(results))
+	for i, r := range results {
+		categories[i] = r.Category
+		values[i] = float64(r.Total)
+		log.Printf("Result %d: %s = %d", i, r.Category, r.Total)
+	}
+
+	// Генерируем график
+	return plot.DrawBarXString(categories, values)
 }
