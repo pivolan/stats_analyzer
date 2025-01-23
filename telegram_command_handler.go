@@ -172,7 +172,7 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		yValues = append(yValues, float64(dc.Count))
 	}
 
-	gr := plot.NewDataForGraph(xValues, yValues, "sadsa", "asdasd", timeUnit)
+	gr := plot.NewDataForGraph(xValues, yValues, "Количество строковых полей", "Количество строк по времени", timeUnit)
 	graphData, err := plot.DrawTimeSeries(gr)
 
 	if err != nil {
@@ -198,7 +198,7 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
 	api.Send(msg)
 	sumFirstColumnDate(db, dateTruncExpr, string(tableName), baseField, columnName, update, api, timeUnit)
-	sendGraphVisualization(graphData, "timeseries", columnName, update.Message.Chat.ID, api, timeUnit)
+	sendGraphVisualization(graphData, "timeseries", columnName, gr.GetNameGraph(), update.Message.Chat.ID, api, timeUnit)
 }
 
 // sum возвращает сумму всех значений в слайсе float64
@@ -242,8 +242,8 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	sendGraphVisualization(statsMsg2, "histForString1", columnName, update.Message.Chat.ID, api)
-	sendGraphVisualization(statsMsg1, "histForString", columnName, update.Message.Chat.ID, api)
+	sendGraphVisualization(statsMsg2, "histForString1", columnName, "", update.Message.Chat.ID, api)
+	sendGraphVisualization(statsMsg1, "histForString", columnName, "", update.Message.Chat.ID, api)
 
 }
 
@@ -733,8 +733,8 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	api.Send(msg)
 
 	// Отправляем график
-	sendGraphVisualization(pngData, "histogram", columnName, update.Message.Chat.ID, api)
-	sendGraphVisualization(pngData2, "Density", columnName, update.Message.Chat.ID, api)
+	sendGraphVisualization(pngData, "histogram", columnName, "", update.Message.Chat.ID, api)
+	sendGraphVisualization(pngData2, "Density", columnName, "", update.Message.Chat.ID, api)
 
 }
 
@@ -1031,48 +1031,5 @@ func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, column
 
 	// Send statistics message
 
-	sendGraphVisualization(graphData, "timeseries", columnName, update.Message.Chat.ID, api)
-}
-func calculateChartDimensions(values []float64, numBars int, minBarWidth float64) (width, height int) {
-	// Проверка входных параметров
-	if len(values) == 0 || numBars <= 0 || minBarWidth <= 0 {
-		return 0, 0
-	}
-	if len(values) < 10 {
-		return 600, 400
-	}
-	// Находим максимальное значение для высоты
-	max := findMaxValue(values)
-	if max <= 0 {
-		return 0, 0
-	}
-	if max < 600 {
-		max = 800
-	}
-	// Константы для отступов и пропорций
-	const (
-		paddingY     = 100        // отступ для оси Y и подписей
-		spacingRatio = 0.2        // соотношение отступа между столбцами к ширине столбца
-		heightRatio  = 0.4        // коэффициент для добавления пространства сверху графика
-		aspectRatio  = 16.0 / 9.0 // соотношение сторон по умолчанию
-	)
-
-	// Рассчитываем ширину
-	barSpacing := minBarWidth * spacingRatio
-	totalWidth := (minBarWidth+barSpacing)*float64(numBars) + barSpacing
-	width = int(totalWidth) + paddingY
-	height = int(max * 1.5)
-	return width, height
-}
-func findMaxValue(values []float64) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	max := values[0]
-	for _, v := range values {
-		if v > max {
-			max = v
-		}
-	}
-	return max
+	sendGraphVisualization(graphData, "timeseries", columnName, gr.GetNameGraph(), update.Message.Chat.ID, api)
 }

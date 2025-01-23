@@ -23,7 +23,7 @@ func NewDataForGraph(x []float64, y []float64, nameYAxis, nameGraph, typeRequest
 	}
 }
 
-func (d *dataForGraph) getNameGraph() string {
+func (d *dataForGraph) GetNameGraph() string {
 	return d.nameGraph
 }
 func (d *dataForGraph) getNameYAxis() string {

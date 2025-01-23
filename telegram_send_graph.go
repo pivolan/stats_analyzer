@@ -16,7 +16,7 @@ import (
 //   - chatID: ID чата для отправки
 //   - api: экземпляр Telegram API для отправки сообщений
 //   - timeUnit: единица измерения времени (опционально, для временных рядов)
-func sendGraphVisualization(graph []byte, visualType string, columnName string, chatID int64, api *tgbotapi.BotAPI, timeUnit ...string) {
+func sendGraphVisualization(graph []byte, visualType string, columnName string, nameGraph string, chatID int64, api *tgbotapi.BotAPI, timeUnit ...string) {
 	// Формируем имя файла с учетом типа визуализации и временной метки
 	fileName := fmt.Sprintf("%s_%s_%s.png",
 		visualType,
@@ -38,7 +38,7 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 	switch {
 	case maxSizePhoto > len(graph):
 		docMsg := tgbotapi.NewPhotoUpload(chatID, pngFile)
-		docMsg.Caption = generateVizualDescription(visualType, columnName, timeUnit...)
+		docMsg.Caption = generateVizualDescription(visualType, columnName, nameGraph, timeUnit...)
 
 		_, err := api.Send(docMsg)
 		if err != nil {
@@ -53,7 +53,7 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 		}
 	case maxSizePhoto < len(graph):
 		docMsg := tgbotapi.NewDocumentUpload(chatID, pngFile)
-		docMsg.Caption = generateVizualDescription(visualType, columnName, timeUnit...)
+		docMsg.Caption = generateVizualDescription(visualType, columnName, nameGraph, timeUnit...)
 
 		_, err := api.Send(docMsg)
 		if err != nil {
@@ -69,7 +69,7 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 
 }
 
-func generateVizualDescription(description, columnName string, timeUnit ...string) string {
+func generateVizualDescription(description, columnName string, nameGraph string, timeUnit ...string) string {
 	var caption string
 	switch description {
 	case "histogram":
@@ -86,8 +86,8 @@ func generateVizualDescription(description, columnName string, timeUnit ...strin
 			timeUnitStr = fmt.Sprintf(" (группировка по %s)", timeUnit[0])
 		}
 		caption = fmt.Sprintf("Временной ряд: %s%s\n"+
-			"Показывает изменение значений во времени.",
-			columnName, timeUnitStr)
+			"Показывает %s.",
+			columnName, timeUnitStr, nameGraph)
 	default:
 		caption = fmt.Sprintf("Визуализация данных: %s", columnName)
 	}

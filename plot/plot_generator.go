@@ -43,7 +43,7 @@ func DrawTimeSeries(dataGraph dataForGraph) ([]byte, error) {
 	}
 	// Настраиваем внешний вид графика
 	bar := chart.BarChart{
-		Title: dataGraph.getNameGraph(),
+		Title: dataGraph.GetNameGraph(),
 		// TitleStyle: chart.Style{Hidden: false},
 
 		Background: chart.Style{
