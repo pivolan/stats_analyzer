@@ -57,7 +57,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 			api.Send(msg)
 			return
 		}
-		handleDateSumStats(api, update, columnName)
+		handleColumnDates(api, update, columnName)
 	case fullCommand == "start":
 		handleStartCommand(api, update)
 	default:
@@ -172,13 +172,8 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		yValues = append(yValues, float64(dc.Count))
 	}
 
-	if len(xValues) < 2 {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Недостаточно данных для построения графика (нужно минимум 2 точки)")
-		api.Send(msg)
-		return
-	}
-
-	graphData, err := plot.DrawTimeSeries(xValues, yValues)
+	gr := plot.NewDataForGraph(xValues, yValues, "sadsa", "asdasd", timeUnit)
+	graphData, err := plot.DrawTimeSeries(gr)
 
 	if err != nil {
 		log.Printf("Error generating time series plot: %v", err)
@@ -202,7 +197,7 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
 	api.Send(msg)
-
+	sumFirstColumnDate(db, dateTruncExpr, string(tableName), baseField, columnName, update, api, timeUnit)
 	sendGraphVisualization(graphData, "timeseries", columnName, update.Message.Chat.ID, api, timeUnit)
 }
 
@@ -852,172 +847,6 @@ func handleStartCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 
 }
 
-func handleDateSumStats(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
-	tableName, exists := currentTable[update.Message.Chat.ID]
-	if !exists {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Сначала выберите таблицу")
-		api.Send(msg)
-		return
-	}
-
-	parts := strings.Split(columnName, "__")
-	if len(parts) != 2 {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неверный формат имени колонки. Ожидается: field__timeunit")
-		api.Send(msg)
-		return
-	}
-
-	baseField := parts[0]
-	timeUnit := parts[1]
-
-	cfg := config.GetConfig()
-	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
-	})
-	if err != nil {
-		log.Printf("Error connecting to database: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка подключения к базе данных")
-		api.Send(msg)
-		return
-	}
-
-	// Формируем SQL с использованием toString для дат
-	var dateGroupSQL string
-	switch timeUnit {
-	case "day":
-		dateGroupSQL = fmt.Sprintf(`
-            SELECT 
-                toString(toDate(%[1]s)) as date,
-                count(*) as count
-            FROM %[2]s
-            WHERE %[1]s IS NOT NULL
-            GROUP BY toDate(%[1]s)
-            ORDER BY toDate(%[1]s)
-        `, baseField, tableName)
-	case "month":
-		dateGroupSQL = fmt.Sprintf(`
-            SELECT 
-                toString(toStartOfMonth(%[1]s)) as date,
-                count(*) as count
-            FROM %[2]s
-            WHERE %[1]s IS NOT NULL
-            GROUP BY toStartOfMonth(%[1]s)
-            ORDER BY toStartOfMonth(%[1]s)
-        `, baseField, tableName)
-	case "year":
-		dateGroupSQL = fmt.Sprintf(`
-            SELECT 
-                toString(toStartOfYear(%[1]s)) as date,
-                count(*) as count
-            FROM %[2]s
-            WHERE %[1]s IS NOT NULL
-            GROUP BY toStartOfYear(%[1]s)
-            ORDER BY toStartOfYear(%[1]s)
-        `, baseField, tableName)
-	default:
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неподдерживаемая единица времени. Используйте: day, month или year")
-		api.Send(msg)
-		return
-	}
-
-	log.Printf("Executing query: %s", dateGroupSQL)
-
-	// Структура для сканирования строковой даты
-	var results []struct {
-		Date  string `json:"date"`
-		Count int64  `json:"count"`
-	}
-
-	if err := db.Raw(dateGroupSQL).Scan(&results).Error; err != nil {
-		log.Printf("Error executing query: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка выполнения запроса")
-		api.Send(msg)
-		return
-	}
-
-	if len(results) == 0 {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Нет данных для анализа")
-		api.Send(msg)
-		return
-	}
-
-	// Подготовка данных для графика
-	xValues := make([]float64, len(results))
-	yValues := make([]float64, len(results))
-
-	var totalCount int64
-	var maxCount int64
-	var maxDate string
-	var minCount = results[0].Count
-	var minDate = results[0].Date
-
-	for i, r := range results {
-		// Парсим дату из строки
-		t, err := time.Parse("2006-01-02", r.Date)
-		if err != nil {
-			log.Printf("Error parsing date %s: %v", r.Date, err)
-			continue
-		}
-
-		xValues[i] = float64(t.Unix())
-		yValues[i] = float64(r.Count)
-
-		totalCount += r.Count
-		if r.Count > maxCount {
-			maxCount = r.Count
-			maxDate = r.Date
-		}
-		if r.Count < minCount {
-			minCount = r.Count
-			minDate = r.Date
-		}
-	}
-
-	avgCount := float64(totalCount) / float64(len(results))
-
-	// Создаем сообщение со статистикой
-	statsMsg := fmt.Sprintf(
-		"Статистика по %s (группировка: %s):\n\n"+
-			"Общая информация:\n"+
-			"• Всего записей: %d\n"+
-			"• Количество периодов: %d\n"+
-			"• Среднее количество в период: %.2f\n\n"+
-			"Максимум:\n"+
-			"• Дата: %s\n"+
-			"• Количество: %d\n\n"+
-			"Минимум:\n"+
-			"• Дата: %s\n"+
-			"• Количество: %d\n\n"+
-			"Период анализа:\n"+
-			"• С %s по %s",
-		baseField, timeUnit,
-		totalCount,
-		len(results),
-		avgCount,
-		maxDate,
-		maxCount,
-		minDate,
-		minCount,
-		results[0].Date,
-		results[len(results)-1].Date,
-	)
-
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, statsMsg)
-	api.Send(msg)
-
-	// Генерируем и отправляем график
-	graphData, err := plot.DrawTimeSeries(xValues, yValues)
-	if err != nil {
-		log.Printf("Error generating plot: %v", err)
-		errMsg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
-		api.Send(errMsg)
-		return
-	}
-
-	sendGraphVisualization(graphData, "timeseries", fmt.Sprintf("%s_%s", baseField, timeUnit),
-		update.Message.Chat.ID, api, timeUnit)
-}
-
 func analyzeNumericData(db *gorm.DB, tableName models.ClickhouseTableName) ([]byte, error) {
 	// Получаем информацию о структуре таблицы, исключая первую колонку (обычно id)
 	tableInfoSQL := fmt.Sprintf(`
@@ -1115,4 +944,135 @@ func analyzeNumericData(db *gorm.DB, tableName models.ClickhouseTableName) ([]by
 
 	// Генерируем график
 	return plot.DrawBarXString(categories, values)
+}
+
+func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, columnName string, update tgbotapi.Update, api *tgbotapi.BotAPI, timeUnit string) {
+	// Get first numeric column
+	var numericColumn string
+	numericColSQL := fmt.Sprintf(`
+	SELECT name
+	FROM system.columns 
+	WHERE table = '%s' 
+	AND type IN ('Int8', 'Int16', 'Int32', 'Int64', 'Float32', 'Float64', 'Decimal') 
+	LIMIT 1`, tableName)
+	err := db.Raw(numericColSQL).Scan(&numericColumn).Error
+	if err != nil {
+		log.Printf("Error getting numeric column: %v", err)
+	}
+
+	// Prepare SQL query with optional numeric aggregation
+	var dateSQL string
+	if numericColumn != "" {
+		dateSQL = fmt.Sprintf(`
+			SELECT 
+				toString(%s) as date,
+				count(*) as count,
+				sum(%s) as sum_value
+			FROM %s 
+			WHERE %s IS NOT NULL 
+			GROUP BY %s 
+			ORDER BY %s
+		`, dateTruncExpr, numericColumn, tableName, baseField, dateTruncExpr, dateTruncExpr)
+	}
+
+	var dateCounts []models.DateCount
+	if err := db.Raw(dateSQL).Scan(&dateCounts).Error; err != nil {
+		log.Printf("Error getting date counts: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка получения статистики по датам")
+		api.Send(msg)
+		return
+	}
+
+	// Добавляем отладочный вывод
+	log.Printf("Raw SQL query: %s", dateSQL)
+	log.Printf("Number of results: %d", len(dateCounts))
+	for i, dc := range dateCounts {
+		log.Printf("Row %d: date = %s, count = %d", i, dc.Date, dc.Count)
+	}
+	// Также проверим значения после парсинга
+	xValues := make([]float64, 0, len(dateCounts))
+	yValues := make([]float64, 0, len(dateCounts))
+
+	const (
+		fullDateTimeFormat = "2006-01-02 15:04:05"
+		dateOnlyFormat     = "2006-01-02"
+	)
+
+	for i, dc := range dateCounts {
+		var t time.Time
+		var err error
+
+		t, err = time.Parse(fullDateTimeFormat, dc.Date)
+		if err != nil {
+			t, err = time.Parse(dateOnlyFormat, dc.Date)
+			if err != nil {
+				log.Printf("Error parsing date %s: %v", dc.Date, err)
+				continue
+			}
+		}
+
+		timestamp := float64(t.Unix())
+		log.Printf("Parsed Row %d: original = %s, timestamp = %f, human readable = %s",
+			i, dc.Date, timestamp, time.Unix(int64(timestamp), 0).Format("2006-01-02 15:04:05"))
+
+		xValues = append(xValues, timestamp)
+		yValues = append(yValues, float64(dc.SumValue))
+	}
+	// созадем структуру для реализации функции
+	gr := plot.NewDataForGraph(xValues, yValues, "sadsa", "asdasd", timeUnit)
+	graphData, err := plot.DrawTimeSeries(gr)
+
+	if err != nil {
+		log.Printf("Error generating time series plot: %v", err)
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
+		api.Send(msg)
+		return
+	}
+
+	// Send statistics message
+
+	sendGraphVisualization(graphData, "timeseries", columnName, update.Message.Chat.ID, api)
+}
+func calculateChartDimensions(values []float64, numBars int, minBarWidth float64) (width, height int) {
+	// Проверка входных параметров
+	if len(values) == 0 || numBars <= 0 || minBarWidth <= 0 {
+		return 0, 0
+	}
+	if len(values) < 10 {
+		return 600, 400
+	}
+	// Находим максимальное значение для высоты
+	max := findMaxValue(values)
+	if max <= 0 {
+		return 0, 0
+	}
+	if max < 600 {
+		max = 800
+	}
+	// Константы для отступов и пропорций
+	const (
+		paddingY     = 100        // отступ для оси Y и подписей
+		spacingRatio = 0.2        // соотношение отступа между столбцами к ширине столбца
+		heightRatio  = 0.4        // коэффициент для добавления пространства сверху графика
+		aspectRatio  = 16.0 / 9.0 // соотношение сторон по умолчанию
+	)
+
+	// Рассчитываем ширину
+	barSpacing := minBarWidth * spacingRatio
+	totalWidth := (minBarWidth+barSpacing)*float64(numBars) + barSpacing
+	width = int(totalWidth) + paddingY
+	height = int(max * 1.5)
+	return width, height
+}
+func findMaxValue(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	max := values[0]
+	for _, v := range values {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }

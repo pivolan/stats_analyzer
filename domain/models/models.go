@@ -66,6 +66,7 @@ type FrequencyData struct {
 	Type  string
 }
 type DateCount struct {
-	Date  string
-	Count float64
+	Date     string
+	Count    float64
+	SumValue float64
 }

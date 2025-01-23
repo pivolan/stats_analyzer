@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
-	"time"
 
 	"github.com/pivolan/stats_analyzer/domain/models"
 	"github.com/wcharczuk/go-chart/v2"
@@ -15,28 +13,28 @@ import (
 	"gorm.io/gorm"
 )
 
-func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
+func DrawTimeSeries(dataGraph dataForGraph) ([]byte, error) {
 
 	var ticks []chart.Tick
 
 	var bars []chart.Value
 	maxVal := 0.0
 
-	for i := 0; i < len(xValues); i++ {
-		if yValues[i] > maxVal {
-			maxVal = yValues[i]
+	for i, v := range dataGraph.getDateAndHour() {
+		if dataGraph.yValues[i] > maxVal {
+			maxVal = dataGraph.getYValues()[i]
 		}
-		t := time.Unix(int64(xValues[i]), 0)
 
 		bars = append(bars, chart.Value{
-			Value: yValues[i],
-			Style: chart.Style{FillColor: drawing.ColorLime.WithAlpha(40)},
-			Label: fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month(), t.Day()),
+			Value: dataGraph.getYValues()[i],
+			Style: chart.Style{FillColor: drawing.ColorLime.WithAlpha(40),
+				TextVerticalAlign: 100},
+			Label: v,
 		})
 	}
-	maxY := findMaxValue(yValues)
+	maxY := dataGraph.findMaxValue()
 	gridStep := calculateGridStep(maxY)
-	width, height := calculateChartDimensions(yValues, len(xValues), 70)
+	width, height := dataGraph.calculateChartDimensions(100)
 	for i := 0.0; i <= maxY; i += gridStep {
 		ticks = append(ticks, chart.Tick{
 			Value: i,
@@ -45,15 +43,16 @@ func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
 	}
 	// Настраиваем внешний вид графика
 	bar := chart.BarChart{
-		Title:      "",
-		TitleStyle: chart.Style{Hidden: true},
+		Title: dataGraph.getNameGraph(),
+		// TitleStyle: chart.Style{Hidden: false},
 
 		Background: chart.Style{
-
+			FontSize:    200,
+			StrokeColor: chart.ColorBlack,
 			Padding: chart.Box{
 				Top: 40,
 
-				Bottom: 100,
+				Bottom: 200,
 			}},
 		Height: height,
 		Width:  width,
@@ -63,10 +62,11 @@ func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
 		XAxis: chart.Style{
 			StrokeWidth:         2, // Толщина линии
 			StrokeColor:         chart.ColorBlack,
-			TextRotationDegrees: 80,
+			TextRotationDegrees: 88,
+			FontSize:            17,
 		},
 		YAxis: chart.YAxis{
-			Name: "Count",
+			Name: dataGraph.getNameYAxis(),
 			Range: &chart.ContinuousRange{
 				Min: 0.0,
 				Max: maxY,
@@ -76,6 +76,7 @@ func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
 
 				StrokeWidth: 2, // Толщина линии
 				StrokeColor: chart.ColorBlack,
+				FontSize:    17,
 			},
 
 			Ticks: ticks,
@@ -92,10 +93,7 @@ func DrawTimeSeries(xValues []float64, yValues []float64) ([]byte, error) {
 			},
 		},
 	}
-	// Надо не забыть убрать  перед деплоем!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	f, _ := os.Create("dynamic_grid.png")
-	defer f.Close()
-	bar.Render(chart.PNG, f)
+
 	// Создаем буфер для записи изображения
 	buffer := bytes.NewBuffer([]byte{})
 
@@ -423,14 +421,10 @@ func DrawBarXString(x []string, y []float64) ([]byte, error) {
 
 	// Создаем буфер для записи изображения
 	buffer := bytes.NewBuffer([]byte{})
-	f, err := os.Create("ssssssssssss.png")
-	if err != nil {
-		fmt.Errorf("####,%v", err)
-	}
-	defer f.Close()
+
 	// Отрисовываем график в формате PNG
-	err = bar.Render(chart.PNG, buffer)
-	err = bar.Render(chart.PNG, f)
+	err := bar.Render(chart.PNG, buffer)
+
 	if err != nil {
 		return nil, fmt.Errorf(" error rendering chart: %v", err)
 	}
