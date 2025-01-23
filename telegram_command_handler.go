@@ -1019,7 +1019,7 @@ func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, column
 		yValues = append(yValues, float64(dc.SumValue))
 	}
 	// созадем структуру для реализации функции
-	gr := plot.NewDataForGraph(xValues, yValues, "sadsa", "asdasd", timeUnit)
+	gr := plot.NewDataForGraph(xValues, yValues, "Sun Value", "Суммарное значение столбца Sum Value группировка по времени", timeUnit)
 	graphData, err := plot.DrawTimeSeries(gr)
 
 	if err != nil {

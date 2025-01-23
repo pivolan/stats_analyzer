@@ -140,7 +140,7 @@ func DrawBar(xStart []float64, xEnd []float64, yValues []float64) ([]byte, error
 		Background: chart.Style{
 
 			Padding: chart.Box{
-				Top: 40,
+				Top: 80,
 			}},
 		Height:   height,
 		Width:    width,
