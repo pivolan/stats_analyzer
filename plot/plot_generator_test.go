@@ -18,14 +18,6 @@ import (
 // 	assert.NoError(t, err)
 // }
 
-func TestDrawBar(t *testing.T) {
-
-	a, err := DrawBar([]float64{1, 2, 3, 4, 5, 6}, []float64{1, 2, 3, 4, 5, 6}, []float64{1, 2, 3, 4, 5, 6})
-	assert.NoError(t, err)
-	err = os.WriteFile("output.png", a, 0655)
-	assert.NoError(t, err)
-}
-
 func TestDrawHistogramm(t *testing.T) {
 
 	bar := chart.BarChart{
@@ -89,16 +81,6 @@ func TestDrawDensityPlot(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestDrawBarXstring(t *testing.T) {
-
-	xValues := []string{"D", "a", "v", "c", "e"}
-	yValues := []float64{10, 10, 10, 10, 10, 10, 10, 10}
-
-	b, err := DrawBarXString(xValues, yValues)
-	assert.NoError(t, err)
-	err = os.WriteFile("DrawBarstring.png", b, 0655)
-	assert.NoError(t, err)
-}
 func TestDrawBarXstring1(t *testing.T) {
 	xValues := []float64{1, 2, 3, 4, 5}
 	yValues := []float64{10, 10, 10, 10, 10}

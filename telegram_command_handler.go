@@ -172,8 +172,8 @@ func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		yValues = append(yValues, float64(dc.Count))
 	}
 
-	gr := plot.NewDataForGraph(xValues, yValues, "Количество строковых полей", "Количество строк по времени", timeUnit)
-	graphData, err := plot.DrawTimeSeries(gr)
+	gr := plot.NewDataDateForGraph(xValues, yValues, "Количество строковых полей", "Количество строк по времени", timeUnit)
+	graphData, err := plot.DrawPlotBar(gr)
 
 	if err != nil {
 		log.Printf("Error generating time series plot: %v", err)
@@ -228,7 +228,7 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	statsMsg1, err := plot.GenerateHistogramForString(db, tableName, columnName)
+	statsMsg1, err := GenerateHistogramForString(db, tableName, columnName)
 	if err != nil {
 		log.Printf("Error generating plot: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
@@ -247,6 +247,43 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 
 }
 
+func GenerateHistogramForString(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) ([]byte, error) {
+	// SQL для получения категориальных данных с подсчетом
+	categoricalSQL := fmt.Sprintf(`
+    SELECT %[1]s as category, 
+           COUNT(*) as count
+    FROM %[2]s
+    WHERE %[1]s IS NOT NULL AND %[1]s != ''
+    GROUP BY %[1]s
+    ORDER BY count DESC
+    LIMIT 20
+`, columnName, tableName)
+
+	type CategoryCount struct {
+		Category string
+		Count    int64
+	}
+
+	var categoryCounts []CategoryCount
+	if err := db.Raw(categoricalSQL).Scan(&categoryCounts).Error; err != nil {
+		return nil, fmt.Errorf("error getting category counts: %v", err)
+	}
+
+	// Подготовка данных для графика
+	categories := make([]string, len(categoryCounts))
+	counts := make([]float64, len(categoryCounts))
+	maxCount := float64(0)
+
+	for i, cc := range categoryCounts {
+		categories[i] = cc.Category
+		counts[i] = float64(cc.Count)
+		if counts[i] > maxCount {
+			maxCount = counts[i]
+		}
+	}
+	hist := plot.NewDataXStringsForGraph(categories, counts, "", "", "")
+	return plot.DrawPlotBar(hist)
+}
 func generateDetailsTextFieldColumn(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) (string, error) {
 
 	// SQL для получения основной статистики строковых значений
@@ -544,6 +581,67 @@ func generateSVGHistogram(histData []models.HistogramData, columnName string) st
 	return svg
 }
 
+func GenerateHistogram(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) ([]byte, error, []byte) {
+	// SQL запрос для получения гистограммы
+	histogramSQL := fmt.Sprintf(`
+        WITH 
+            min_max AS (
+                SELECT min(%[1]s) as min_val, max(%[1]s) as max_val 
+                FROM %[2]s 
+                WHERE %[1]s IS NOT NULL
+            ),
+            hist AS (
+                SELECT 
+                    arrayJoin(histogram(20)(%[1]s)) as hist_row
+                FROM %[2]s
+            )
+        SELECT 
+            hist_row.1 as range_start,
+            hist_row.2 as range_end,
+            hist_row.3 as count
+        FROM hist
+        ORDER BY range_start;
+    `, columnName, tableName)
+
+	// Определяем структуру с корректными тегами
+	type HistogramData struct {
+		RangeStart float64 `db:"range_start"`
+		RangeEnd   float64 `db:"range_end"`
+		Count      float64 `db:"count"`
+	}
+
+	var histData []HistogramData
+	if err := db.Raw(histogramSQL).Scan(&histData).Error; err != nil {
+		return nil, fmt.Errorf("error getting histogram data: %v", err), nil
+	}
+	xStart := make([]float64, len(histData))
+	xEnd := make([]float64, len(histData))
+	// Логируем полученные данные
+	log.Printf("Received %d data points", len(histData))
+	for i, data := range histData {
+		log.Printf("Data point %d: Start=%f, End=%f, Count=%f",
+			i, data.RangeStart, data.RangeEnd, data.Count)
+	}
+
+	// Подготавливаем данные для визуализации
+	xValues := make([]float64, len(histData))
+	yValues := make([]float64, len(histData))
+
+	for i, data := range histData {
+		// Используем середину диапазона для оси X
+		xStart[i] = data.RangeStart
+		xEnd[i] = data.RangeEnd
+		yValues[i] = data.Count
+		xValues[i] = (xStart[i] + xEnd[i]) / 2
+		log.Printf("Point %d: XStart=%f,XEnd:=%f ,Y=%f", i, xStart[i], xEnd[i], yValues[i])
+	}
+
+	histBar := plot.NewDataRangeXValuesForGraph(xStart, xEnd, yValues, "", "", "")
+	// Генерируем гистограмму
+	hist, _ := plot.DrawPlotBar(histBar)
+	graph, _ := plot.DrawDensityPlot(xValues, yValues)
+	return hist, nil, graph
+}
 func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
 	tableName, exists := currentTable[update.Message.Chat.ID]
 	if !exists {
@@ -683,7 +781,7 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 		yValues[i] = float64(rangeCount.Count)
 	}
 
-	pngData, err, pngData2 := plot.GenerateHistogram(db, tableName, columnName)
+	pngData, err, pngData2 := GenerateHistogram(db, tableName, columnName)
 	if err != nil {
 		log.Printf("Error generating plot: %v", err)
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
@@ -943,7 +1041,8 @@ func analyzeNumericData(db *gorm.DB, tableName models.ClickhouseTableName) ([]by
 	}
 
 	// Генерируем график
-	return plot.DrawBarXString(categories, values)
+	data := plot.NewDataXStringsForGraph(categories, values, "Histogram String Value", "Frequency", "")
+	return plot.DrawPlotBar(data)
 }
 
 func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, columnName string, update tgbotapi.Update, api *tgbotapi.BotAPI, timeUnit string) {
@@ -959,7 +1058,6 @@ func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, column
 	if err != nil {
 		log.Printf("Error getting numeric column: %v", err)
 	}
-
 	// Prepare SQL query with optional numeric aggregation
 	var dateSQL string
 	if numericColumn != "" {
@@ -1019,8 +1117,8 @@ func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, column
 		yValues = append(yValues, float64(dc.SumValue))
 	}
 	// созадем структуру для реализации функции
-	gr := plot.NewDataForGraph(xValues, yValues, "Sun Value", "Суммарное значение столбца Sum Value группировка по времени", timeUnit)
-	graphData, err := plot.DrawTimeSeries(gr)
+	gr := plot.NewDataDateForGraph(xValues, yValues, columnName, fmt.Sprintf("Суммарное значение столбца %s группировка по времени", columnName), timeUnit)
+	graphData, err := plot.DrawPlotBar(gr)
 
 	if err != nil {
 		log.Printf("Error generating time series plot: %v", err)
