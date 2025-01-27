@@ -185,33 +185,14 @@ func DrawPlotBar(data dataForGraph) ([]byte, error) {
 	var ticks []chart.Tick
 
 	width, height := data.calculateChartDimensions(100)
-	switch data.(type) {
-	case dataDateForGraph:
-		barData := data.(dataDateForGraph)
-		nameY = barData.getNameYAxis()
-		nameGraph = barData.GetNameGraph()
-		ticks = barData.generateGrid()
-	case dataRangeXValuesForGraph:
-		barData := data.(dataRangeXValuesForGraph)
-		nameY = barData.getNameYAxis()
-		nameGraph = barData.GetNameGraph()
-		ticks = barData.generateGrid()
-	case dataXStringsForGraph:
-		barData := data.(dataXStringsForGraph)
-		nameY = barData.getNameYAxis()
-		nameGraph = barData.GetNameGraph()
-		ticks = barData.generateGrid()
-	default:
-		return nil, fmt.Errorf("[Error] Ошибка с переключением типа")
-	}
-
+	nameGraph = data.GetNameGraph()
 	bar := chart.BarChart{}
 	bar.Title = nameGraph
 	bar.Background = chart.Style{
 		FontSize:    160,
 		StrokeColor: chart.ColorBlack,
 		Padding: chart.Box{
-			Top: 40,
+			Top: 150,
 
 			Bottom: 200,
 		},
@@ -224,7 +205,7 @@ func DrawPlotBar(data dataForGraph) ([]byte, error) {
 		Name: nameY,
 		Range: &chart.ContinuousRange{
 			Min: 0.0,
-			Max: data.findMaxValue(),
+			Max: findMaxValue(data.getYValues()),
 		},
 		Style: chart.Style{
 
@@ -260,4 +241,16 @@ func DrawPlotBar(data dataForGraph) ([]byte, error) {
 	}
 
 	return buffer.Bytes(), nil
+}
+func findMaxValue(y []float64) float64 {
+	if len(y) == 0 {
+		return 0
+	}
+	max := y[0]
+	for _, v := range y {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }

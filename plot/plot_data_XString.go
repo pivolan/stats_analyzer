@@ -41,18 +41,7 @@ func (d dataXStringsForGraph) getXValues() []string {
 func (d dataXStringsForGraph) lenXValues() int {
 	return len(d.xValues)
 }
-func (d dataXStringsForGraph) findMaxValue() float64 {
-	if len(d.yValues) == 0 {
-		return 0
-	}
-	max := d.yValues[0]
-	for _, v := range d.yValues {
-		if v > max {
-			max = v
-		}
-	}
-	return max
-}
+
 func (d dataXStringsForGraph) calculateChartDimensions(minBarWidth float64) (width, height int) {
 	// Проверка входных параметров
 	if len(d.yValues) == 0 || d.lenXValues() <= 0 || minBarWidth <= 0 {
@@ -85,7 +74,7 @@ func (d dataXStringsForGraph) calculateChartDimensions(minBarWidth float64) (wid
 func (d dataXStringsForGraph) generateBarValues() []chart.Value {
 	var bars []chart.Value
 	yValues := d.getYValues()
-	max := d.findMaxValue()
+	max := findMaxValue(d.getYValues())
 	xValues := d.getXValues()
 	for i := 0; i < len(d.xValues); i++ {
 		if yValues[i] > max {
@@ -104,7 +93,7 @@ func (d dataXStringsForGraph) generateBarValues() []chart.Value {
 
 func (d dataXStringsForGraph) generateGrid() []chart.Tick {
 	var ticks []chart.Tick
-	max := d.findMaxValue()
+	max := findMaxValue(d.getYValues())
 	gridStep := calculateGridStep(max)
 	for i := 0.0; i <= max; i += gridStep {
 		ticks = append(ticks, chart.Tick{

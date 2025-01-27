@@ -1117,7 +1117,7 @@ func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, column
 		yValues = append(yValues, float64(dc.SumValue))
 	}
 	// созадем структуру для реализации функции
-	gr := plot.NewDataDateForGraph(xValues, yValues, columnName, fmt.Sprintf("Суммарное значение столбца %s группировка по времени", columnName), timeUnit)
+	gr := plot.NewDataDateForGraph(xValues, yValues, columnName, fmt.Sprintf("Суммарное значение столбца %s группировка по времени", numericColumn), timeUnit)
 	graphData, err := plot.DrawPlotBar(gr)
 
 	if err != nil {

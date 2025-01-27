@@ -64,18 +64,7 @@ func (d dataDateForGraph) getTypeRequest() string {
 func (d dataDateForGraph) lenXValues() int {
 	return len(d.xValues)
 }
-func (d dataDateForGraph) findMaxValue() float64 {
-	if len(d.yValues) == 0 {
-		return 0
-	}
-	max := d.yValues[0]
-	for _, v := range d.yValues {
-		if v > max {
-			max = v
-		}
-	}
-	return max
-}
+
 func (d dataDateForGraph) calculateChartDimensions(minBarWidth float64) (width, height int) {
 	// Проверка входных параметров
 	if len(d.yValues) == 0 || d.lenXValues() <= 0 || minBarWidth <= 0 {
@@ -105,7 +94,7 @@ func (d dataDateForGraph) calculateChartDimensions(minBarWidth float64) (width, 
 	return width, height
 }
 func (d dataDateForGraph) generateBarValues() []chart.Value {
-	maxVal := d.findMaxValue()
+	maxVal := findMaxValue(d.yValues)
 	var bars []chart.Value
 	for i, v := range d.getDateAndHour() {
 		if d.yValues[i] > maxVal {
@@ -124,7 +113,7 @@ func (d dataDateForGraph) generateBarValues() []chart.Value {
 
 func (d dataDateForGraph) generateGrid() []chart.Tick {
 	var ticks []chart.Tick
-	max := d.findMaxValue()
+	max := findMaxValue(d.yValues)
 	gridStep := calculateGridStep(max)
 	for i := 0.0; i <= max; i += gridStep {
 		ticks = append(ticks, chart.Tick{
