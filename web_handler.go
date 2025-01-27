@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {
