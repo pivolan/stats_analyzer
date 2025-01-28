@@ -74,13 +74,13 @@ func main() {
 	u.Timeout = 60
 
 	go func() {
-		fmt.Println("listen on: http://localhost:8005")
-		err := http.ListenAndServe(":8005", nil)
+		fmt.Println("listen on: http://localhost:8105")
+		err := http.ListenAndServe(":8105", nil)
 		if err != nil {
 			fmt.Println("Error starting server:", err)
 			os.Exit(1)
 		}
-		fmt.Println("start listen http 8005")
+		fmt.Println("start listen http 8105")
 	}()
 
 	updates, err := bot.GetUpdatesChan(u)
