@@ -9,9 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-)
 
-import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
@@ -33,7 +31,7 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 			numericColumns = append(numericColumns, field)
 		} else if stat.Uniq > 0 || len(stat.Groups) > 0 {
 			stringColumns = append(stringColumns, field)
-		} else if len(stat.Dates) > 0 {
+		} else if len(stat.Dates) > 0 && !strings.HasPrefix(field, "graph_") {
 			dateColumns = append(dateColumns, field)
 		}
 	}

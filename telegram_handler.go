@@ -14,6 +14,7 @@ import (
 
 	"github.com/pivolan/stats_analyzer/config"
 	"github.com/pivolan/stats_analyzer/domain/models"
+	"github.com/pivolan/stats_analyzer/plot"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -231,7 +232,7 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 				return
 			}
 		}
-
+		Select(stat, chatId, bot)
 	}
 
 }
@@ -288,124 +289,91 @@ func handleFile(filePath string) (models.ClickhouseTableName, error) {
 	return tableName, nil
 }
 
-// func generateTimeSeriesSVG(data []map[string]interface{}, title string) string {
-// 	// Находим все числовые метрики
-// 	metrics := []string{}
-// 	if len(data) > 0 {
-// 		for key, value := range data[0] {
-// 			if key != "datetime" && key != "common" {
-// 				if _, ok := value.(float64); ok {
-// 					metrics = append(metrics, key)
-// 				}
-// 			}
-// 		}
-// 	}
+func Select(stat map[string]CommonStat, chatID int64, bot *tgbotapi.BotAPI) {
+	const (
+		fullDateTimeFormat = "2006-01-02 15:04:05"
+		dateOnlyFormat     = "2006-01-02"
+		maxPoints          = 20
+	)
 
-// 	// Находим минимальные и максимальные значения
-// 	minVal, maxVal := math.MaxFloat64, -math.MaxFloat64
-// 	for _, item := range data {
-// 		for _, metric := range metrics {
-// 			if val, ok := item[metric].(float64); ok {
-// 				if val < minVal {
-// 					minVal = val
-// 				}
-// 				if val > maxVal {
-// 					maxVal = val
-// 				}
-// 			}
-// 		}
-// 	}
+	// Порядок интервалов от меньшего к большему
+	intervals := []string{"hour", "day", "month", "year"}
 
-// 	// Параметры графика
-// 	width, height := 1000.0, 400.0
-// 	padding := struct{ top, right, bottom, left float64 }{50.0, 260.0, 70.0, 60.0}
-// 	chartWidth := width - padding.left - padding.right
-// 	chartHeight := height - padding.top - padding.bottom
+	// Для каждого интервала пытаемся построить график
+	for _, interval := range intervals {
+		x := []float64{}
+		y := []float64{}
+		z := []float64{}
 
-// 	// Цвета для линий
-// 	colors := []string{"#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#ff0000"}
+		// Ищем данные для текущего интервала
+		for k, v := range stat {
+			if strings.HasPrefix(k, "graph_") && strings.HasSuffix(k, interval) {
+				if len(v.Dates) == 0 {
+					continue
+				}
 
-// 	// Начинаем генерировать SVG
-// 	svg := fmt.Sprintf(`<svg viewBox="0 0 %.0f %.0f" xmlns="http://www.w3.org/2000/svg">
-//     <defs>
-//         <style>
-//             text { font-family: Arial, sans-serif; font-size: 12px; }
-//             .title { font-size: 16px; font-weight: bold; }
-//             .axis-label { font-size: 10px; }
-//             .legend-text { font-size: 12px; }
-//         </style>
-//     </defs>`, width, height)
+				fmt.Println("GETALL", v)
+				// Собираем все точки для данного интервала
+				for _, point := range v.Dates {
+					d := point["date"].(string)
 
-// 	// Добавляем заголовок
-// 	svg += fmt.Sprintf(`<text x="%.0f" y="30" text-anchor="middle" class="title">%s</text>`,
-// 		width/2, title)
+					t, err := time.Parse(fullDateTimeFormat, d)
+					if err != nil {
+						t, err = time.Parse(dateOnlyFormat, d)
+						if err != nil {
+							log.Printf("Error parsing date %s: %v", d, err)
+							continue
+						}
+					}
 
-// 	// Добавляем область графика
-// 	svg += fmt.Sprintf(`<rect x="%.0f" y="%.0f" width="%.0f" height="%.0f" fill="none" stroke="#ccc" stroke-width="1"/>`,
-// 		padding.left, padding.top, chartWidth, chartHeight)
+					timeStamp := float64(t.Unix())
+					x = append(x, timeStamp)
+					z = append(z, float64(point["cnt"].(int64)))
+					y = append(y, float64(point["sum_value"].(int64)))
+				}
 
-// 	// Сетка
-// 	for i := 0; i <= 5; i++ {
-// 		y := padding.top + (chartHeight * float64(i) / 5.0)
-// 		svg += fmt.Sprintf(`<line x1="%.0f" y1="%.0f" x2="%.0f" y2="%.0f" stroke="#eee"/>`,
-// 			padding.left, y, width-padding.right, y)
-// 	}
+				// Если точек больше maxPoints, переходим к следующему интервалу
+				if len(x) > maxPoints {
+					log.Printf("Too many points (%d) for interval %s, trying next interval",
+						len(x), interval)
+					break
+				}
 
-// 	// Метки значений
-// 	for i := 0; i <= 5; i++ {
-// 		y := padding.top + (chartHeight * float64(i) / 5.0)
-// 		value := maxVal - ((maxVal - minVal) * float64(i) / 5.0)
-// 		svg += fmt.Sprintf(`<text x="%.0f" y="%.0f" text-anchor="end" class="axis-label">%.1f</text>`,
-// 			padding.left-5, y+4, value)
-// 	}
+				// Если у нас есть подходящее количество точек, строим графики
+				if len(x) > 0 && len(x) <= maxPoints {
+					objectGraph := plot.NewDataDateForGraph(
+						x,
+						z,
+						"count",
+						fmt.Sprintf("Показывает количество строк по времени в таблице", k[6:]),
+						interval,
+					)
+					graph, err := plot.DrawPlotBar(objectGraph)
+					if err == nil {
+						sendGraphVisualization(graph, "timeseries", "count",
+							objectGraph.GetNameGraph(), chatID, bot)
+					}
 
-// 	// Данные
-// 	for i, metric := range metrics {
-// 		color := colors[i%len(colors)]
-// 		points := make([]string, len(data))
-// 		for j, item := range data {
-// 			x := padding.left + (float64(j) * chartWidth / float64(len(data)-1))
-// 			if val, ok := item[metric].(float64); ok {
-// 				y := padding.top + chartHeight - ((val - minVal) * chartHeight / (maxVal - minVal))
-// 				if j == 0 {
-// 					points[j] = fmt.Sprintf("M%.1f,%.1f", x, y)
-// 				} else {
-// 					points[j] = fmt.Sprintf("L%.1f,%.1f", x, y)
-// 				}
-// 			}
-// 		}
-// 		svg += fmt.Sprintf(`<path d="%s" stroke="%s" fill="none" stroke-width="2"/>`,
-// 			strings.Join(points, " "), color)
-// 	}
+					objectGraph1 := plot.NewDataDateForGraph(
+						x,
+						y,
+						"sum",
+						fmt.Sprintf("суммарное значение столбца %v по времени", v.Title),
+						interval,
+					)
+					graph1, err := plot.DrawPlotBar(objectGraph1)
+					if err == nil {
+						sendGraphVisualization(graph1, "timeseries", "sum",
+							objectGraph1.GetNameGraph(), chatID, bot)
+					}
 
-// 	// Оси
-// 	svg += fmt.Sprintf(`<line x1="%.0f" y1="%.0f" x2="%.0f" y2="%.0f" stroke="#000"/>`,
-// 		padding.left, height-padding.bottom, width-padding.right, height-padding.bottom)
-// 	svg += fmt.Sprintf(`<line x1="%.0f" y1="%.0f" x2="%.0f" y2="%.0f" stroke="#000"/>`,
-// 		padding.left, padding.top, padding.left, height-padding.bottom)
+					// Графики построены успешно, выходим из функции
+					return
+				}
+			}
+		}
+	}
 
-// 	// Метки времени
-// 	for i, item := range data {
-// 		if i%3 == 0 { // Показываем каждую третью метку для избежания перекрытия
-// 			x := padding.left + (float64(i) * chartWidth / float64(len(data)-1))
-// 			svg += fmt.Sprintf(`<text x="%.0f" y="%.0f" transform="rotate(-45 %.0f,%.0f)"
-//                 text-anchor="end" class="axis-label">%v</text>`,
-// 				x, height-padding.bottom+20, x, height-padding.bottom+20,
-// 				item["datetime"])
-// 		}
-// 	}
-
-// 	// Легенда
-// 	legendX := width - padding.right + 10
-// 	for i, metric := range metrics {
-// 		y := padding.top + float64(i)*20
-// 		color := colors[i%len(colors)]
-// 		svg += fmt.Sprintf(`
-//             <rect x="%.0f" y="%.0f" width="15" height="15" fill="%s"/>
-//             <text x="%.0f" y="%.0f" class="legend-text">%s</text>`,
-// 			legendX, y, color, legendX+20, y+12, metric)
-// 	}
-
-// 	svg += "</svg>"
-// 	return svg
-// }
+	// Если не удалось построить графики ни для одного интервала
+	log.Printf("Could not create graphs for any time interval")
+}

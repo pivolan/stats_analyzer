@@ -43,6 +43,7 @@ func analyzeStatistics(tableName models.ClickhouseTableName) map[string]CommonSt
 	r := mergeStat(r1, r2, r3)
 	//generate by date fields
 	sqls3 := generateSqlForGroupByDates(columnsInfo, tableName)
+
 	for name, sql3 := range sqls3 {
 		fmt.Println(sql3)
 		dateAggregatesInfo := []map[string]interface{}{}
@@ -75,6 +76,25 @@ func analyzeStatistics(tableName models.ClickhouseTableName) map[string]CommonSt
 		groupsInfo.Title = title
 		r[columnName] = groupsInfo
 	}
+
+	numericCOl := findNumColomn(db, tableName)
+
+	sqls5 := generateSqlForOneGraphByDates(columnsInfo, numericCOl, tableName)
+
+	for name, sqls5 := range sqls5 {
+		fmt.Println(sqls5)
+		dateAggregatesInfo := []map[string]interface{}{}
+
+		tx5 := db.Raw(sqls5)
+		t := tx5.Scan(&dateAggregatesInfo)
+		if t.Error != nil {
+			fmt.Println(t.Error)
+		}
+		datesInfo := CommonStat{Dates: dateAggregatesInfo}
+		r[fmt.Sprintf("graph_%s", name)] = datesInfo
+
+	}
+
 	return r
 }
 
@@ -108,7 +128,7 @@ func generateSqlForGroups(columnInfos []models.ColumnInfo, uniqInfos map[string]
 func generateSqlForGroupByDates(columnsInfo []models.ColumnInfo, table models.ClickhouseTableName) map[string]string {
 	sqls := map[string]string{}
 	for _, columnInfo := range columnsInfo {
-		truncateDatesList := []string{"year", "month", "day"}
+		truncateDatesList := []string{"hour", "year", "month", "day"}
 		if strings.HasPrefix(columnInfo.Type, "DateTime") {
 			truncateDatesList = append(truncateDatesList, "hour")
 		}
@@ -125,4 +145,57 @@ func generateSqlForGroupByDates(columnsInfo []models.ColumnInfo, table models.Cl
 
 	//select trunc('hour', column), count(*), min(column1), max(column2), ... from table_name group by 1 order by 1 desc
 	return sqls
+}
+
+func generateSqlForOneGraphByDates(columnsInfo []models.ColumnInfo, numericColumn string, table models.ClickhouseTableName) map[string]string {
+	sqls := map[string]string{}
+
+	// Ищем колонки с типом Date или DateTime
+	for _, columnInfo := range columnsInfo {
+		if !strings.HasPrefix(columnInfo.Type, "Date") && !strings.HasPrefix(columnInfo.Type, "DateTime") {
+			continue
+		}
+
+		// Определяем доступные интервалы
+		truncateDatesList := []string{"year", "month", "day"}
+		if strings.HasPrefix(columnInfo.Type, "DateTime") {
+			// Для DateTime добавляем часы в начало списка
+			truncateDatesList = append([]string{"hour"}, truncateDatesList...)
+		}
+
+		// Генерируем SQL для каждого интервала
+		for _, truncdate := range truncateDatesList {
+			if numericColumn != "" {
+				sql := fmt.Sprintf(`
+                    SELECT
+                        toString(date_trunc('%s', %s)) as date,
+                        count(*) as cnt,
+                        sum(%s) as sum_value
+                    FROM %s
+                    GROUP BY date
+                    ORDER BY date
+                `, truncdate, columnInfo.Name, numericColumn, table)
+
+				key := fmt.Sprintf("%s__%s", columnInfo.Name, truncdate)
+				sqls[key] = sql
+			}
+		}
+	}
+
+	return sqls
+}
+
+func findNumColomn(db *gorm.DB, table models.ClickhouseTableName) string {
+	var numericColumn string
+	numericColSQL := fmt.Sprintf(`
+	SELECT name
+	FROM system.columns
+	WHERE table = '%s'
+	AND type IN ('Int8', 'Int16', 'Int32', 'Int64', 'Float32', 'Float64', 'Decimal')
+	LIMIT 1`, table)
+	err := db.Raw(numericColSQL).Scan(&numericColumn).Error
+	if err != nil {
+		log.Printf("Error getting numeric column: %v", err)
+	}
+	return numericColumn
 }
