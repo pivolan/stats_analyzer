@@ -73,8 +73,6 @@ func (d dataDateForGraph) calculateChartDimensions(minBarWidth float64) (width, 
 	x := 1.1
 	if d.lenXValues() < 2 {
 		x = 10.0
-	} else if d.lenXValues() < 10 {
-		x = 3.0
 	}
 	// // Находим максимальное значение для высоты
 
@@ -93,9 +91,12 @@ func (d dataDateForGraph) calculateChartDimensions(minBarWidth float64) (width, 
 	height = int(float64(width) * aspectRatio)
 	return width, height
 }
+
+// генерируем значения среднее значение
 func (d dataDateForGraph) generateBarValues() []chart.Value {
 	maxVal := findMaxValue(d.yValues)
 	var bars []chart.Value
+
 	for i, v := range d.getDateAndHour() {
 		if d.yValues[i] > maxVal {
 			maxVal = d.getYValues()[i]

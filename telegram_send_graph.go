@@ -88,6 +88,10 @@ func generateVizualDescription(description, columnName string, nameGraph string,
 		caption = fmt.Sprintf("Временной ряд: %s%s\n"+
 			"Показывает %s.",
 			columnName, timeUnitStr, nameGraph)
+	case "FrequencyPlot":
+		caption = fmt.Sprintf("Визуализация частоты встречаемости строковых значений ")
+	case "AggregationPlot":
+		caption = fmt.Sprintf("Визуализация агрегацию (суммирования) числовых данных по категориям %s", columnName)
 	default:
 		caption = fmt.Sprintf("Визуализация данных: %s", columnName)
 	}

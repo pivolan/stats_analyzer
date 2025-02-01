@@ -241,8 +241,8 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	sendGraphVisualization(statsMsg2, "histForString1", columnName, "", update.Message.Chat.ID, api)
-	sendGraphVisualization(statsMsg1, "histForString", columnName, "", update.Message.Chat.ID, api)
+	sendGraphVisualization(statsMsg2, "FrequencyPlot", columnName, "", update.Message.Chat.ID, api)
+	sendGraphVisualization(statsMsg1, "AggregationPlot", columnName, "", update.Message.Chat.ID, api)
 
 }
 
@@ -830,8 +830,8 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	api.Send(msg)
 
 	// Отправляем график
-	sendGraphVisualization(pngData, "histogram", columnName, "", update.Message.Chat.ID, api)
-	sendGraphVisualization(pngData2, "Density", columnName, "", update.Message.Chat.ID, api)
+	sendGraphVisualization(pngData, "histogram", columnName, "частотное распределения категориальных данных", update.Message.Chat.ID, api)
+	sendGraphVisualization(pngData2, "density", columnName, "суммирование числовых данных по категориям", update.Message.Chat.ID, api)
 
 }
 

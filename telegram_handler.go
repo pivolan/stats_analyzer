@@ -345,7 +345,7 @@ func Select(stat map[string]CommonStat, chatID int64, bot *tgbotapi.BotAPI) {
 						x,
 						z,
 						"count",
-						fmt.Sprintf("Показывает количество строк по времени в таблице", k[6:]),
+						fmt.Sprintf("Показывает количество строк по времени в таблице %v", k[11:]),
 						interval,
 					)
 					graph, err := plot.DrawPlotBar(objectGraph)

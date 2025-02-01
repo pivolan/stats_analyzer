@@ -183,7 +183,8 @@ func DrawPlotBar(data dataForGraph) ([]byte, error) {
 
 	var nameY, nameGraph string
 	var ticks []chart.Tick
-
+	barValues := data.generateBarValues()
+	paddingX := customizePaddingXBottom(barValues)
 	width, height := data.calculateChartDimensions(100)
 	nameGraph = data.GetNameGraph()
 	bar := chart.BarChart{}
@@ -192,15 +193,14 @@ func DrawPlotBar(data dataForGraph) ([]byte, error) {
 		FontSize:    160,
 		StrokeColor: chart.ColorBlack,
 		Padding: chart.Box{
-			Top: 150,
-
-			Bottom: 200,
+			Bottom: paddingX,
+			Top:    50,
 		},
 	}
-	bar.Height = height
-	bar.Width = width
+	bar.Height = height + 50
+	bar.Width = width + paddingX + 50
 	bar.BarWidth = 60
-	bar.Bars = data.generateBarValues()
+	bar.Bars = barValues
 	bar.YAxis = chart.YAxis{
 		Name: nameY,
 		Range: &chart.ContinuousRange{
@@ -253,4 +253,14 @@ func findMaxValue(y []float64) float64 {
 		}
 	}
 	return max
+}
+
+func customizePaddingXBottom(values []chart.Value) int {
+	count := 0
+	for _, v := range values {
+		if len(v.Label) > count {
+			count = len(v.Label)
+		}
+	}
+	return int(count * 8)
 }
