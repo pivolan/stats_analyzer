@@ -36,29 +36,32 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 	result.WriteString("\n")
 
 	// Text Columns
-	result.WriteString("📝 Text Columns:\n")
+	result.WriteString("\n📝 Text Columns:\n")
 	processedColumns := make(map[string]bool)
+	// isFirstColumn := true
 
+	count := 0
 	for name, stat := range stats {
 		if !stat.IsNumeric && !strings.HasPrefix(name, "dates_") {
 			baseName := strings.TrimPrefix(name, "0002_")
 			if processedColumns[baseName] {
 				continue
 			}
-
+			if count > 0 && count%2 == 0 {
+				result.WriteString("\n")
+			}
 			if stat.Uniq > 0 {
 				result.WriteString(fmt.Sprintf("• %s (%d unique values); /details_%s\n",
 					baseName, stat.Uniq, name))
 			}
 
-			// Вывод частых значений
+			// Самое частое значение
+			maxCount := int64(0)
+			var mostFrequent string
 			if len(stat.Groups) > 0 && strings.Contains(stat.Title, "частые") {
-				result.WriteString("  Most frequent values:\n")
 				for _, group := range stat.Groups {
 					count := int64(0)
 					value := ""
-
-					// Получаем значение
 					for k, v := range group {
 						if k != "count" && k != "percentage" {
 							value = fmt.Sprintf("%v", v)
@@ -69,22 +72,25 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 							}
 						}
 					}
-
-					if value != "" {
-						result.WriteString(fmt.Sprintf("    • %s (%d times)\n", value, count))
+					if count > maxCount {
+						maxCount = count
+						mostFrequent = value
 					}
+				}
+				if mostFrequent != "" {
+					result.WriteString(fmt.Sprintf("Most frequent: %s (%d times)\n",
+						mostFrequent, maxCount))
 				}
 			}
 
-			// Проверяем есть ли редкие значения
+			// Самое редкое значение
 			rareName := name + "_rare"
+			minCount := int64(^uint64(0) >> 1)
+			var rarest string
 			if rareStat, exists := stats[rareName]; exists && len(rareStat.Groups) > 0 {
-				result.WriteString("  Rare values:\n")
 				for _, group := range rareStat.Groups {
 					count := int64(0)
 					value := ""
-
-					// Получаем значение
 					for k, v := range group {
 						if k != "count" && k != "percentage" {
 							value = fmt.Sprintf("%v", v)
@@ -95,16 +101,20 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 							}
 						}
 					}
-
-					if value != "" {
-						result.WriteString(fmt.Sprintf("    • %s (%d times)\n", value, count))
+					if count < minCount {
+						minCount = count
+						rarest = value
 					}
+				}
+				if rarest != "" {
+					result.WriteString(fmt.Sprintf("Most rare: %s (%d times)",
+						rarest, minCount))
 				}
 			}
 			processedColumns[baseName] = true
+			count++
 		}
 	}
-	result.WriteString("\n")
 
 	// Date Columns
 	if hasDates := false; true {
@@ -127,6 +137,7 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 				} else if strings.Contains(name, "hour") {
 					result.WriteString(fmt.Sprintf("• %s (hour); /%s\n",
 						strings.TrimSuffix(fieldName, "_hour"), name))
+
 				}
 			}
 		}
@@ -134,6 +145,128 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 
 	return result.String()
 }
+
+// func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
+// 	var result strings.Builder
+
+// 	// Total Records
+// 	if allStat, ok := stats["all"]; ok {
+// 		result.WriteString(fmt.Sprintf("📊 Total Lines: %d\n\n", allStat.Count))
+// 	}
+
+// 	// Numeric Columns
+// 	result.WriteString("📈 Numeric Columns:\n")
+// 	for name, stat := range stats {
+// 		if stat.IsNumeric {
+// 			columnName := strings.TrimPrefix(name, "0003_")
+// 			result.WriteString(fmt.Sprintf("• %s\n", columnName))
+// 			result.WriteString(fmt.Sprintf("  Avg: %.2f\n", stat.Avg))
+// 			result.WriteString(fmt.Sprintf("  Median: %.2f\n", stat.Median))
+// 			result.WriteString(fmt.Sprintf("  90%% of values between: %.2f - %.2f\n", stat.Quantile01, stat.Quantile09))
+// 			result.WriteString(fmt.Sprintf("  /graph_%s\n", name))
+// 		}
+// 	}
+// 	result.WriteString("\n")
+
+// 	// Text Columns
+// 	result.WriteString("📝 Text Columns:\n")
+// 	processedColumns := make(map[string]bool)
+
+// 	for name, stat := range stats {
+// 		if !stat.IsNumeric && !strings.HasPrefix(name, "dates_") {
+// 			baseName := strings.TrimPrefix(name, "0002_")
+// 			if processedColumns[baseName] {
+// 				continue
+// 			}
+
+// 			if stat.Uniq > 0 {
+// 				result.WriteString(fmt.Sprintf("• %s (%d unique values); /details_%s\n",
+// 					baseName, stat.Uniq, name))
+// 			}
+
+// 			// Вывод частых значений
+// 			if len(stat.Groups) > 0 && strings.Contains(stat.Title, "частые") {
+// 				result.WriteString("  Most frequent values:\n")
+// 				for _, group := range stat.Groups {
+// 					count := int64(0)
+// 					value := ""
+
+// 					// Получаем значение
+// 					for k, v := range group {
+// 						if k != "count" && k != "percentage" {
+// 							value = fmt.Sprintf("%v", v)
+// 						}
+// 						if k == "count" {
+// 							if c, ok := v.(int64); ok {
+// 								count = c
+// 							}
+// 						}
+// 					}
+
+// 					if value != "" {
+// 						result.WriteString(fmt.Sprintf("    • %s (%d times)\n", value, count))
+// 					}
+// 				}
+// 			}
+
+// 			// Проверяем есть ли редкие значения
+// 			rareName := name + "_rare"
+// 			if rareStat, exists := stats[rareName]; exists && len(rareStat.Groups) > 0 {
+// 				result.WriteString("  Rare values:\n")
+// 				for _, group := range rareStat.Groups {
+// 					count := int64(0)
+// 					value := ""
+
+// 					// Получаем значение
+// 					for k, v := range group {
+// 						if k != "count" && k != "percentage" {
+// 							value = fmt.Sprintf("%v", v)
+// 						}
+// 						if k == "count" {
+// 							if c, ok := v.(int64); ok {
+// 								count = c
+// 							}
+// 						}
+// 					}
+
+// 					if value != "" {
+// 						result.WriteString(fmt.Sprintf("    • %s (%d times)\n", value, count))
+// 					}
+// 				}
+// 			}
+// 			processedColumns[baseName] = true
+// 		}
+// 	}
+// 	result.WriteString("\n")
+
+// 	// Date Columns
+// 	if hasDates := false; true {
+// 		for name, stat := range stats {
+// 			if strings.HasPrefix(name, "dates_") && len(stat.Dates) > 0 {
+// 				if !hasDates {
+// 					result.WriteString("📅 Date Columns:\n")
+// 					hasDates = true
+// 				}
+// 				fieldName := strings.TrimPrefix(name, "dates_0001_")
+// 				if strings.Contains(name, "day") {
+// 					result.WriteString(fmt.Sprintf("• %s (day); /%s\n",
+// 						strings.TrimSuffix(fieldName, "_day"), name))
+// 				} else if strings.Contains(name, "month") {
+// 					result.WriteString(fmt.Sprintf("• %s (month); /%s\n",
+// 						strings.TrimSuffix(fieldName, "_month"), name))
+// 				} else if strings.Contains(name, "year") {
+// 					result.WriteString(fmt.Sprintf("• %s (year); /%s\n",
+// 						strings.TrimSuffix(fieldName, "_year"), name))
+// 				} else if strings.Contains(name, "hour") {
+// 					result.WriteString(fmt.Sprintf("• %s (hour); /%s\n",
+// 						strings.TrimSuffix(fieldName, "_hour"), name))
+// 				}
+// 			}
+// 		}
+// 	}
+
+// 	return result.String()
+// }
 
 // Вспомогательная функция для определения, является ли строка числом
 func isNumericColumn(name string) bool {
