@@ -97,32 +97,127 @@ func analyzeStatistics(tableName models.ClickhouseTableName) map[string]CommonSt
 
 	return r
 }
-
 func generateSqlForGroups(columnInfos []models.ColumnInfo, uniqInfos map[string]CommonStat, table models.ClickhouseTableName) []string {
 	sqls := []string{}
 	groupedColumns := []string{}
+
 	for _, columnInfo := range columnInfos {
 		if columnInfo.Type == "String" || columnInfo.Type == "Nullable(String)" {
 			if uniqInfo, ok := uniqInfos[columnInfo.Name]; ok {
 				if uniqInfo.Uniq > 1 && uniqInfo.Uniq < 1000 {
-					sql1 := columnInfo.Name + "//Самые частые//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) DESC LIMIT 100"
-					sqls = append(sqls, sql1)
-					//if uniqInfo.Uniq > 100 {
-					//	sql2 := columnInfo.Name + "//Редкие//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) LIMIT 100"
-					//	sqls = append(sqls, sql2)
-					//}
+					// Modified SQL to include percentage and better formatting
+					mostFrequentSQL := fmt.Sprintf(`%s//Самые частые значения в %s//
+                        SELECT 
+                            count(*) as count,
+                            %s as value,
+                            (count(*) * 100.0 / (SELECT count(*) FROM %s)) as percentage
+                        FROM %s 
+                        WHERE %s IS NOT NULL
+                        GROUP BY %s 
+                        ORDER BY count DESC 
+                        LIMIT 10`,
+						columnInfo.Name, columnInfo.Name,
+						columnInfo.Name, table, table,
+						columnInfo.Name, columnInfo.Name)
+
+					leastFrequentSQL := fmt.Sprintf(`%s_rare//Редкие значения в %s//
+                        SELECT 
+                            count(*) as count,
+                            %s as value,
+                            (count(*) * 100.0 / (SELECT count(*) FROM %s)) as percentage
+                        FROM %s 
+                        WHERE %s IS NOT NULL
+                        GROUP BY %s 
+                        HAVING count(*) > 1
+                        ORDER BY count ASC 
+                        LIMIT 10`,
+						columnInfo.Name, columnInfo.Name,
+						columnInfo.Name, table, table,
+						columnInfo.Name, columnInfo.Name)
+
+					sqls = append(sqls, mostFrequentSQL, leastFrequentSQL)
 					groupedColumns = append(groupedColumns, columnInfo.Name)
 				}
 			}
 		}
 	}
+
+	// Modified combined columns analysis
 	if len(groupedColumns) > 1 {
-		sql1 := "9999_all_columns_frequently//Группировка по всем колонкам самые частые варианты//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
-		sql2 := "9999_all_columns_rarely//Группировка по всем колонкам самые редкие//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
-		sqls = append(sqls, sql1, sql2)
+		combinedFrequentSQL := fmt.Sprintf(`9999_all_columns_frequently//Частые комбинации значений//
+            SELECT 
+                count(*) as count,
+                %s,
+                (count(*) * 100.0 / (SELECT count(*) FROM %s)) as percentage
+            FROM %s 
+            GROUP BY %s 
+            ORDER BY count DESC 
+            LIMIT 10`,
+			strings.Join(groupedColumns, ","),
+			table, table,
+			strings.Join(groupedColumns, ","))
+
+		combinedRareSQL := fmt.Sprintf(`9999_all_columns_rarely//Редкие комбинации значений//
+            SELECT 
+                count(*) as count,
+                %s,
+                (count(*) * 100.0 / (SELECT count(*) FROM %s)) as percentage
+            FROM %s 
+            GROUP BY %s 
+            HAVING count(*) > 1
+            ORDER BY count ASC 
+            LIMIT 10`,
+			strings.Join(groupedColumns, ","),
+			table, table,
+			strings.Join(groupedColumns, ","))
+
+		sqls = append(sqls, combinedFrequentSQL, combinedRareSQL)
 	}
+
 	return sqls
 }
+
+// Add a new function to format the results nicely
+func formatValueFrequency(groups []map[string]interface{}) string {
+	var result strings.Builder
+
+	for _, group := range groups {
+		count := group["count"].(int64)
+		value := group["value"].(string)
+		percentage := group["percentage"].(float64)
+
+		result.WriteString(fmt.Sprintf("• %s (%d раз, %.2f%%)\n",
+			value, count, percentage))
+	}
+
+	return result.String()
+}
+
+// func generateSqlForGroups(columnInfos []models.ColumnInfo, uniqInfos map[string]CommonStat, table models.ClickhouseTableName) []string {
+// 	sqls := []string{}
+// 	groupedColumns := []string{}
+// 	for _, columnInfo := range columnInfos {
+// 		if columnInfo.Type == "String" || columnInfo.Type == "Nullable(String)" {
+// 			if uniqInfo, ok := uniqInfos[columnInfo.Name]; ok {
+// 				if uniqInfo.Uniq > 1 && uniqInfo.Uniq < 1000 {
+// 					sql1 := columnInfo.Name + "//Самые частые//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) DESC LIMIT 100"
+// 					sqls = append(sqls, sql1)
+// 					//if uniqInfo.Uniq > 100 {
+// 					//	sql2 := columnInfo.Name + "//Редкие//SELECT count(*), " + columnInfo.Name + " FROM " + string(table) + " GROUP BY " + columnInfo.Name + " ORDER BY count(*) LIMIT 100"
+// 					//	sqls = append(sqls, sql2)
+// 					//}
+// 					groupedColumns = append(groupedColumns, columnInfo.Name)
+// 				}
+// 			}
+// 		}
+// 	}
+// 	if len(groupedColumns) > 1 {
+// 		sql1 := "9999_all_columns_frequently//Группировка по всем колонкам самые частые варианты//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) DESC LIMIT 100"
+// 		sql2 := "9999_all_columns_rarely//Группировка по всем колонкам самые редкие//SELECT count(*), " + strings.Join(groupedColumns, ",") + " FROM " + string(table) + " GROUP BY " + strings.Join(groupedColumns, ",") + " ORDER BY count(*) LIMIT 100"
+// 		sqls = append(sqls, sql1, sql2)
+// 	}
+// 	return sqls
+// }
 
 // method will find all date fields and generate sql for group by them
 func generateSqlForGroupByDates(columnsInfo []models.ColumnInfo, table models.ClickhouseTableName) map[string]string {

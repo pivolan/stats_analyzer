@@ -185,21 +185,23 @@ func DrawPlotBar(data dataForGraph) ([]byte, error) {
 	var ticks []chart.Tick
 	barValues := data.generateBarValues()
 	paddingX := customizePaddingXBottom(barValues)
-	width, height := data.calculateChartDimensions(100)
+	width, height := data.calculateChartDimensions(60)
 	nameGraph = data.GetNameGraph()
 	bar := chart.BarChart{}
 	bar.Title = nameGraph
 	bar.Background = chart.Style{
-		FontSize:    160,
+		FontSize:    140,
 		StrokeColor: chart.ColorBlack,
 		Padding: chart.Box{
 			Bottom: paddingX,
 			Top:    50,
+			Right:  50,
+			Left:   50,
 		},
 	}
 	bar.Height = height + 50
-	bar.Width = width + paddingX + 50
-	bar.BarWidth = 60
+	bar.Width = width + paddingX + 25
+	bar.BarWidth = 50
 	bar.Bars = barValues
 	bar.YAxis = chart.YAxis{
 		Name: nameY,
@@ -259,8 +261,9 @@ func customizePaddingXBottom(values []chart.Value) int {
 	count := 0
 	for _, v := range values {
 		if len(v.Label) > count {
-			count = len(v.Label)
+			count = len([]rune(v.Label))
+
 		}
 	}
-	return int(count * 8)
+	return int(count * 9)
 }

@@ -47,12 +47,8 @@ func (d dataXStringsForGraph) calculateChartDimensions(minBarWidth float64) (wid
 	if len(d.yValues) == 0 || d.lenXValues() <= 0 || minBarWidth <= 0 {
 		return 0, 0
 	}
-	x := 1.1
-	if d.lenXValues() < 2 {
-		x = 10.0
-	} else if d.lenXValues() < 10 {
-		x = 3.0
-	}
+	x := 1.8
+
 	// // Находим максимальное значение для высоты
 
 	// Константы для отступов и пропорций

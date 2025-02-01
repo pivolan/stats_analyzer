@@ -71,9 +71,7 @@ func (d dataDateForGraph) calculateChartDimensions(minBarWidth float64) (width, 
 		return 0, 0
 	}
 	x := 1.1
-	if d.lenXValues() < 2 {
-		x = 10.0
-	}
+
 	// // Находим максимальное значение для высоты
 
 	// Константы для отступов и пропорций

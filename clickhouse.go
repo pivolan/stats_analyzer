@@ -516,14 +516,16 @@ func (c *CommonStat) Set(key string, value interface{}) error {
 	return nil
 }
 
-func parseUniqResults(uniqResults map[string]interface{}) (result map[string]CommonStat) {
-	result = map[string]CommonStat{}
+func parseUniqResults(uniqResults map[string]interface{}) map[string]CommonStat {
+	result := make(map[string]CommonStat)
 	for field, value := range uniqResults {
-		if value.(int64) != 0 {
-			result[field] = CommonStat{Uniq: value.(int64)}
+		if uniqCount, ok := value.(int64); ok && uniqCount > 0 {
+			result[field] = CommonStat{
+				Uniq: uniqCount,
+			}
 		}
 	}
-	return
+	return result
 }
 func parseCountResults(countResults map[string]interface{}) (result map[string]CommonStat) {
 	result = map[string]CommonStat{}

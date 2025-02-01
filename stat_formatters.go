@@ -21,91 +21,128 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 		result.WriteString(fmt.Sprintf("📊 Total Lines: %d\n\n", allStat.Count))
 	}
 
-	// Collect numeric and string columns
-	var numericColumns, stringColumns, dateColumns []string
-	for field, stat := range stats {
-		if field == "all" {
-			continue
-		}
-		if stat.IsNumeric {
-			numericColumns = append(numericColumns, field)
-		} else if stat.Uniq > 0 || len(stat.Groups) > 0 {
-			stringColumns = append(stringColumns, field)
-		} else if len(stat.Dates) > 0 && !strings.HasPrefix(field, "graph_") {
-			dateColumns = append(dateColumns, field)
-		}
-	}
-
-	// Sort columns alphabetically
-	sort.Strings(numericColumns)
-	sort.Strings(stringColumns)
-	sort.Strings(dateColumns)
-
 	// Numeric Columns
-	if len(numericColumns) > 0 {
-		result.WriteString("📈 Numeric Columns:\n")
-		for _, field := range numericColumns {
-			stat := stats[field]
-			result.WriteString(fmt.Sprintf("• %s\n", field[5:]))
+	result.WriteString("📈 Numeric Columns:\n")
+	for name, stat := range stats {
+		if stat.IsNumeric {
+			columnName := strings.TrimPrefix(name, "0003_")
+			result.WriteString(fmt.Sprintf("• %s\n", columnName))
 			result.WriteString(fmt.Sprintf("  Avg: %.2f\n", stat.Avg))
 			result.WriteString(fmt.Sprintf("  Median: %.2f\n", stat.Median))
 			result.WriteString(fmt.Sprintf("  90%% of values between: %.2f - %.2f\n", stat.Quantile01, stat.Quantile09))
-
-			// Add graph shortcut
-			result.WriteString(fmt.Sprintf("  /graph_%s\n\n", field))
+			result.WriteString(fmt.Sprintf("  /graph_%s\n", name))
 		}
 	}
+	result.WriteString("\n")
 
-	// String Columns
-	if len(stringColumns) > 0 {
-		result.WriteString("📝 Text Columns:\n")
-		for _, field := range stringColumns {
-			stat := stats[field]
+	// Text Columns
+	result.WriteString("📝 Text Columns:\n")
+	processedColumns := make(map[string]bool)
+
+	for name, stat := range stats {
+		if !stat.IsNumeric && !strings.HasPrefix(name, "dates_") {
+			baseName := strings.TrimPrefix(name, "0002_")
+			if processedColumns[baseName] {
+				continue
+			}
+
 			if stat.Uniq > 0 {
-				result.WriteString(fmt.Sprintf("• %s (%d unique values); /details_%s\n", field[5:], stat.Uniq, field))
+				result.WriteString(fmt.Sprintf("• %s (%d unique values); /details_%s\n",
+					baseName, stat.Uniq, name))
 			}
 
-			// Check if we have group data
-			if len(stat.Groups) > 0 {
-				// Find the most frequent value
-				maxCount := int64(0)
-				var maxValue string
-				columnName := ""
+			// Вывод частых значений
+			if len(stat.Groups) > 0 && strings.Contains(stat.Title, "частые") {
+				result.WriteString("  Most frequent values:\n")
 				for _, group := range stat.Groups {
-					for columnName, _ = range group {
-						if columnName != "count()" {
-							break
+					count := int64(0)
+					value := ""
+
+					// Получаем значение
+					for k, v := range group {
+						if k != "count" && k != "percentage" {
+							value = fmt.Sprintf("%v", v)
+						}
+						if k == "count" {
+							if c, ok := v.(int64); ok {
+								count = c
+							}
 						}
 					}
-					if count, ok := group["count()"].(int64); ok {
-						if count > maxCount {
-							maxCount = count
-							maxValue = fmt.Sprintf("%v", group[columnName])
-						}
+
+					if value != "" {
+						result.WriteString(fmt.Sprintf("    • %s (%d times)\n", value, count))
 					}
-				}
-				if maxValue != "" {
-					result.WriteString(fmt.Sprintf("  Most frequent: %s (%d times)\n", maxValue, maxCount))
 				}
 			}
 
-			// Check if it's a date column
-			if len(stat.Dates) > 0 {
-				result.WriteString("  (detected as date)\n")
+			// Проверяем есть ли редкие значения
+			rareName := name + "_rare"
+			if rareStat, exists := stats[rareName]; exists && len(rareStat.Groups) > 0 {
+				result.WriteString("  Rare values:\n")
+				for _, group := range rareStat.Groups {
+					count := int64(0)
+					value := ""
+
+					// Получаем значение
+					for k, v := range group {
+						if k != "count" && k != "percentage" {
+							value = fmt.Sprintf("%v", v)
+						}
+						if k == "count" {
+							if c, ok := v.(int64); ok {
+								count = c
+							}
+						}
+					}
+
+					if value != "" {
+						result.WriteString(fmt.Sprintf("    • %s (%d times)\n", value, count))
+					}
+				}
 			}
-			result.WriteString("\n")
+			processedColumns[baseName] = true
 		}
 	}
-	if len(dateColumns) > 0 {
-		result.WriteString("📝 Date Columns:\n")
-		for _, field := range dateColumns {
-			//stat := stats[field]
-			result.WriteString(fmt.Sprintf("• %s; /%s\n", field[11:], field))
+	result.WriteString("\n")
+
+	// Date Columns
+	if hasDates := false; true {
+		for name, stat := range stats {
+			if strings.HasPrefix(name, "dates_") && len(stat.Dates) > 0 {
+				if !hasDates {
+					result.WriteString("📅 Date Columns:\n")
+					hasDates = true
+				}
+				fieldName := strings.TrimPrefix(name, "dates_0001_")
+				if strings.Contains(name, "day") {
+					result.WriteString(fmt.Sprintf("• %s (day); /%s\n",
+						strings.TrimSuffix(fieldName, "_day"), name))
+				} else if strings.Contains(name, "month") {
+					result.WriteString(fmt.Sprintf("• %s (month); /%s\n",
+						strings.TrimSuffix(fieldName, "_month"), name))
+				} else if strings.Contains(name, "year") {
+					result.WriteString(fmt.Sprintf("• %s (year); /%s\n",
+						strings.TrimSuffix(fieldName, "_year"), name))
+				} else if strings.Contains(name, "hour") {
+					result.WriteString(fmt.Sprintf("• %s (hour); /%s\n",
+						strings.TrimSuffix(fieldName, "_hour"), name))
+				}
+			}
 		}
 	}
+
 	return result.String()
 }
 
+// Вспомогательная функция для определения, является ли строка числом
+func isNumericColumn(name string) bool {
+	// Проверяем, начинается ли имя с цифр (0001_, 0002_ и т.д.)
+	if len(name) >= 4 && name[0:4] == "0003" {
+		return true
+	}
+	return false
+}
 func GenerateTable(stats map[string]CommonStat) string {
 	// Create a new table with a Key column and columns for each field in the CommonStat struct
 	t := table.NewWriter()
