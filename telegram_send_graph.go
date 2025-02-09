@@ -45,8 +45,8 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 			log.Printf("Ошибка отправки визуализации %s для колонки %s: %v",
 				visualType, columnName, err)
 			errMsg := tgbotapi.NewMessage(chatID,
-				fmt.Sprintf("Не удалось отправить визуализацию %s. Ошибка: %v",
-					visualType, err))
+				fmt.Sprintf("Не удалось отправить визуализацию %s. Данные не подходят для данного графика",
+					visualType))
 			api.Send(errMsg)
 			return
 
@@ -60,8 +60,8 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 			log.Printf("Ошибка отправки визуализации %s для колонки %s: %v",
 				visualType, columnName, err)
 			errMsg := tgbotapi.NewMessage(chatID,
-				fmt.Sprintf("Не удалось отправить визуализацию %s. Ошибка: %v",
-					visualType, err))
+				fmt.Sprintf("Не удалось отправить визуализацию %s. Данные не подходят для данного графика",
+					visualType))
 			api.Send(errMsg)
 			return
 		}

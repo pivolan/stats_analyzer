@@ -241,8 +241,8 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	sendGraphVisualization(statsMsg2, "FrequencyPlot", columnName, "", update.Message.Chat.ID, api)
-	sendGraphVisualization(statsMsg1, "AggregationPlot", columnName, "", update.Message.Chat.ID, api)
+	sendGraphVisualization(statsMsg2, "FrequencyPlot", columnName[5:], "", update.Message.Chat.ID, api)
+	sendGraphVisualization(statsMsg1, "AggregationPlot", columnName[5:], "", update.Message.Chat.ID, api)
 
 }
 
@@ -456,129 +456,6 @@ func GenerateColumnHistogram(db *gorm.DB, tableName models.ClickhouseTableName, 
 	return "", nil
 	// return generateSVGHistogram(histData, columnName), nil
 }
-
-// func generateSVGHistogram(histData []models.HistogramData, columnName string) string {
-// 	// Параметры SVG
-// 	width := 800
-// 	height := 400
-// 	padding := 70 // Увеличили padding для меток осей
-// 	graphWidth := width - 2*padding
-// 	graphHeight := height - 2*padding
-
-// 	// Находим максимальные значения для осей
-// 	maxCount := 0
-// 	maxValue := histData[len(histData)-1].RangeEnd
-// 	minValue := histData[0].RangeStart
-
-// 	for _, data := range histData {
-// 		if data.Count > maxCount {
-// 			maxCount = data.Count
-// 		}
-// 	}
-
-// 	// Создаем точки для кривой Безье
-// 	points := make([]string, len(histData))
-// 	for i, data := range histData {
-// 		// Используем логарифмическую шкалу для Y
-// 		yLog := math.Log1p(float64(data.Count))
-// 		yMaxLog := math.Log1p(float64(maxCount))
-
-// 		x := padding + int(float64(i)*float64(graphWidth)/float64(len(histData)-1))
-// 		y := height - padding - int((yLog/yMaxLog)*float64(graphHeight))
-
-// 		if i == 0 {
-// 			points[i] = fmt.Sprintf("M %d %d", x, y)
-// 		} else {
-// 			// Создаем контрольные точки для кривой Безье
-// 			prevX := padding + int(float64(i-1)*float64(graphWidth)/float64(len(histData)-1))
-// 			ctrlX1 := prevX + (x-prevX)/2
-// 			ctrlX2 := x - (x-prevX)/2
-// 			points[i] = fmt.Sprintf("C %d %d %d %d %d %d",
-// 				ctrlX1, y, ctrlX2, y, x, y)
-// 		}
-// 	}
-
-// 	// Начало SVG с определением градиента и стилей
-// 	svg := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d">
-//         <defs>
-//             <linearGradient id="gradient" x1="0%%" y1="0%%" x2="0%%" y2="100%%">
-//                 <stop offset="0%%" style="stop-color:#4682B4;stop-opacity:0.8"/>
-//                 <stop offset="100%%" style="stop-color:#4682B4;stop-opacity:0.2"/>
-//             </linearGradient>
-//         </defs>
-//         <style>
-//             .axis { stroke: #333; stroke-width: 1; }
-//             .axis-label { font-family: Arial; font-size: 12px; fill: #666; }
-//             .title { font-family: Arial; font-size: 16px; fill: #333; }
-//             .grid { stroke: #ddd; stroke-width: 0.5; }
-//             .curve { fill: none; stroke: #4682B4; stroke-width: 2; }
-//             .area { fill: url(#gradient); opacity: 0.5; }
-//             .tick-label { font-family: Arial; font-size: 10px; fill: #666; }
-//         </style>`, width, height)
-
-// 	// Добавляем заголовок
-// 	svg += fmt.Sprintf(`
-//         <text x="%d" y="30" text-anchor="middle" class="title">
-//             Распределение значений: %s (логарифмическая шкала)
-//         </text>`, width/2, columnName)
-
-// 	// Добавляем сетку и метки для оси Y
-// 	yTicks := 5
-// 	for i := 0; i <= yTicks; i++ {
-// 		y := height - padding - int(float64(i)*float64(graphHeight)/float64(yTicks))
-// 		value := math.Exp(float64(i)*math.Log1p(float64(maxCount))/float64(yTicks)) - 1
-
-// 		// Горизонтальная линия сетки
-// 		svg += fmt.Sprintf(`
-//             <line x1="%d" y1="%d" x2="%d" y2="%d" class="grid"/>
-//             <text x="%d" y="%d" text-anchor="end" class="tick-label">%d</text>`,
-// 			padding, y, width-padding, y,
-// 			padding-5, y+4, int(value))
-// 	}
-
-// 	// Добавляем метки для оси X
-// 	xTicks := 5
-// 	for i := 0; i <= xTicks; i++ {
-// 		x := padding + int(float64(i)*float64(graphWidth)/float64(xTicks))
-// 		value := minValue + (maxValue-minValue)*float64(i)/float64(xTicks)
-
-// 		// Вертикальная линия сетки
-// 		svg += fmt.Sprintf(`
-//             <line x1="%d" y1="%d" x2="%d" y2="%d" class="grid"/>
-//             <text x="%d" y="%d" text-anchor="middle" class="tick-label" transform="rotate(-45 %d,%d)">%.1f</text>`,
-// 			x, padding, x, height-padding,
-// 			x, height-padding+20, x, height-padding+20, value)
-// 	}
-
-// 	// Добавляем оси
-// 	svg += fmt.Sprintf(`
-//         <line x1="%d" y1="%d" x2="%d" y2="%d" class="axis"/>
-//         <line x1="%d" y1="%d" x2="%d" y2="%d" class="axis"/>`,
-// 		padding, padding, padding, height-padding, // Y axis
-// 		padding, height-padding, width-padding, height-padding) // X axis
-
-// 	// Добавляем подписи осей
-// 	svg += fmt.Sprintf(`
-//         <text x="%d" y="%d" transform="rotate(-90 %d,%d)"
-//               text-anchor="middle" class="axis-label">Количество (log scale)</text>
-//         <text x="%d" y="%d" text-anchor="middle" class="axis-label">Значение</text>`,
-// 		padding-40, height/2, padding-40, height/2,
-// 		width/2, height-5)
-
-// 	// Добавляем кривую и область под ней
-// 	pathD := strings.Join(points, " ")
-// 	areaPath := pathD + fmt.Sprintf(" L %d %d L %d %d Z",
-// 		width-padding, height-padding,
-// 		padding, height-padding)
-
-// 	svg += fmt.Sprintf(`
-//         <path d="%s" class="area"/>
-//         <path d="%s" class="curve"/>`,
-// 		areaPath, pathD)
-
-// 	svg += "</svg>"
-// 	return svg
-// }
 
 func GenerateHistogram(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) ([]byte, error, []byte) {
 	// SQL запрос для получения гистограммы
@@ -830,8 +707,8 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	api.Send(msg)
 
 	// Отправляем график
-	sendGraphVisualization(pngData, "histogram", columnName, "частотное распределения категориальных данных", update.Message.Chat.ID, api)
-	sendGraphVisualization(pngData2, "density", columnName, "суммирование числовых данных по категориям", update.Message.Chat.ID, api)
+	sendGraphVisualization(pngData, "histogram", columnName[5:], "частотное распределения категориальных данных", update.Message.Chat.ID, api)
+	sendGraphVisualization(pngData2, "density", columnName[5:], "суммирование числовых данных по категориям", update.Message.Chat.ID, api)
 
 }
 
