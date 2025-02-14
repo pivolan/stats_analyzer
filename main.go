@@ -30,6 +30,31 @@ func main() {
 	if err != nil {
 		log.Fatalln("cannot connect to clickhouse", err)
 	}
+	// Add new goroutine for periodic table cleanup
+	go func() {
+		for {
+			log.Println("start clean all tables")
+			time.Sleep(time.Minute)
+			// Query to get all tables
+			var tables []string
+			result := db.Raw("SHOW TABLES").Scan(&tables)
+			if result.Error != nil {
+				log.Printf("Error getting tables: %v", result.Error)
+				continue
+			}
+
+			// Drop each table
+			for _, table := range tables {
+				dropSQL := fmt.Sprintf("DROP TABLE IF EXISTS `%s`", table)
+				if err := db.Exec(dropSQL).Error; err != nil {
+					log.Printf("Error dropping table %s: %v", table, err)
+					continue
+				}
+				log.Printf("Dropped table: %s", table)
+			}
+		}
+	}()
+
 	go func() {
 		for {
 			<-time.Tick(time.Second)

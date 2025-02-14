@@ -361,6 +361,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 	b := bytes.NewBufferString("")
 	csvWriter := csv.NewWriter(b)
 	i := 1
+	tx = db.Exec("SET max_query_size = 1048576")
 	for ; ; i++ {
 		values, err := r.Read()
 		if err != nil {
@@ -389,7 +390,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 			csvWriter.Flush()
 			sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
 			b.Reset()
-			tx = db.Exec(sql)
+			tx = tx.Exec(sql)
 			if tx.Error != nil {
 				return "", tx.Error
 			}
@@ -399,7 +400,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 	csvWriter.Flush()
 	if b.Len() > 0 {
 		sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
-		tx = db.Exec(sql)
+		tx = tx.Exec(sql)
 		if tx.Error != nil {
 			return "", tx.Error
 		}
