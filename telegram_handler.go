@@ -165,35 +165,6 @@ func splitMessage(text string, maxLength int) []string {
 
 	return messages
 }
-func getTableColumns(tableName models.ClickhouseTableName, db *gorm.DB) ([]string, error) {
-	// Query to get column information
-	var columns []struct {
-		ColumnName string `gorm:"column:COLUMN_NAME"`
-	}
-
-	err := db.Raw(`
-        SELECT COLUMN_NAME 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_NAME = ? 
-        ORDER BY ORDINAL_POSITION`,
-		tableName).Scan(&columns).Error
-
-	if err != nil {
-		return nil, fmt.Errorf("error getting columns: %v", err)
-	}
-
-	// Process column names - remove first 5 characters
-	processedColumns := make([]string, 0, len(columns))
-	for _, col := range columns {
-		if len(col.ColumnName) > 5 {
-			processedColumns = append(processedColumns, col.ColumnName[5:])
-		} else {
-			processedColumns = append(processedColumns, col.ColumnName)
-		}
-	}
-
-	return processedColumns, nil
-}
 func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	tableName := currentTable[chatId]
 	if tableName == "" {
@@ -202,7 +173,7 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 		return
 	}
 
-	// Connect to database
+	// Подключаемся к базе данных
 	cfg := config.GetConfig()
 	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{})
 	if err != nil {
@@ -211,25 +182,34 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 		return
 	}
 
-	// Get columns
-	columns, err := getTableColumns(tableName, db)
+	// Получаем информацию о колонках
+	columns, err := getColumnAndTypeList(db, tableName)
 	if err != nil {
-		msg := tgbotapi.NewMessage(chatId, "Error retrieving column information: "+err.Error())
+		msg := tgbotapi.NewMessage(chatId, "Error getting column info: "+err.Error())
 		bot.Send(msg)
 		return
 	}
 
-	// Format column message
+	// Формируем сообщение со списком колонок
 	columnMsg := "📊 Columns in your table:\n\n"
 	for i, col := range columns {
-		columnMsg += fmt.Sprintf("%d. %s\n", i+1, col)
+		// Убираем первые 5 символов из имени колонки, если длина позволяет
+		colName := col.Name
+		if len(colName) > 5 {
+			colName = colName[5:]
+		}
+		columnMsg += fmt.Sprintf("%d. %s (%s)\n", i+1, colName, col.Type)
 	}
 
-	// Send column information
+	// Отправляем информацию о колонках
 	msg := tgbotapi.NewMessage(chatId, columnMsg)
-	bot.Send(msg)
-	formattedText := GenerateCommonInfoMsg(stat)
+	_, err = bot.Send(msg)
+	if err != nil {
+		log.Printf("Error sending column info: %v", err)
+	}
 
+	// Продолжаем с основной статистикой
+	formattedText := GenerateCommonInfoMsg(stat)
 	// Split long messages
 	const maxLength = 4000
 	messages := splitMessage(formattedText, maxLength)
