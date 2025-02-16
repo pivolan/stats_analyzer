@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/pivolan/stats_analyzer/domain/models"
 	"html/template"
 	"log"
 	"net/http"
@@ -34,7 +35,7 @@ func main() {
 	go func() {
 		for {
 			log.Println("start clean all tables")
-			time.Sleep(time.Minute)
+			time.Sleep(time.Hour)
 			// Query to get all tables
 			var tables []string
 			result := db.Raw("SHOW TABLES").Scan(&tables)
@@ -45,6 +46,9 @@ func main() {
 
 			// Drop each table
 			for _, table := range tables {
+				if _, ok := toDeleteTable[models.ClickhouseTableName(table)]; ok {
+					continue
+				}
 				dropSQL := fmt.Sprintf("DROP TABLE IF EXISTS `%s`", table)
 				if err := db.Exec(dropSQL).Error; err != nil {
 					log.Printf("Error dropping table %s: %v", table, err)
