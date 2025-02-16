@@ -234,16 +234,7 @@ func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnNam
 		api.Send(msg)
 		return
 	}
-	statsMsg2, err := analyzeNumericData(db, tableName)
-	if err != nil {
-		log.Printf("Error generating plot: %v", err)
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Ошибка генерации графика")
-		api.Send(msg)
-		return
-	}
-	sendGraphVisualization(statsMsg2, "FrequencyPlot", columnName[5:], "", update.Message.Chat.ID, api)
 	sendGraphVisualization(statsMsg1, "AggregationPlot", columnName[5:], "", update.Message.Chat.ID, api)
-
 }
 
 func GenerateHistogramForString(db *gorm.DB, tableName models.ClickhouseTableName, columnName string) ([]byte, error) {
@@ -821,7 +812,7 @@ func handleStartCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 
 }
 
-func analyzeNumericData(db *gorm.DB, tableName models.ClickhouseTableName) ([]byte, error) {
+func sumNumericByStringGroups(db *gorm.DB, tableName models.ClickhouseTableName) ([]byte, error) {
 	// Получаем информацию о структуре таблицы, исключая первую колонку (обычно id)
 	tableInfoSQL := fmt.Sprintf(`
         SELECT 
