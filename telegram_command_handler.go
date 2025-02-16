@@ -137,9 +137,6 @@ func handleDateColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName s
 	// Добавляем отладочный вывод
 	log.Printf("Raw SQL query: %s", dateSQL)
 	log.Printf("Number of results: %d", len(dateCounts))
-	for i, dc := range dateCounts {
-		log.Printf("Row %d: date = %s, count = %d", i, dc.Date, dc.Count)
-	}
 
 	// Также проверим значения после парсинга
 	xValues := make([]float64, 0, len(dateCounts))
@@ -150,7 +147,7 @@ func handleDateColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName s
 		dateOnlyFormat     = "2006-01-02"
 	)
 
-	for i, dc := range dateCounts {
+	for _, dc := range dateCounts {
 		var t time.Time
 		var err error
 
@@ -164,8 +161,6 @@ func handleDateColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName s
 		}
 
 		timestamp := float64(t.Unix())
-		log.Printf("Parsed Row %d: original = %s, timestamp = %f, human readable = %s",
-			i, dc.Date, timestamp, time.Unix(int64(timestamp), 0).Format("2006-01-02 15:04:05"))
 
 		xValues = append(xValues, timestamp)
 		yValues = append(yValues, float64(dc.Count))
@@ -187,7 +182,7 @@ func handleDateColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName s
 			"• Всего записей: %d\n"+
 			"• Уникальных дат: %d\n"+
 			"• Период: с %s по %s\n",
-		columnName,
+		strings.Split(columnName[5:], "__")[0],
 		int(sum(yValues)),
 		len(dateCounts),
 		dateCounts[0].Date,

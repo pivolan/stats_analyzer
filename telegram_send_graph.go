@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
@@ -72,6 +73,9 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 func generateVizualDescription(description, columnName string, nameGraph string, timeUnit ...string) string {
 	if len(columnName) > 5 {
 		columnName = columnName[5:]
+		if strings.Contains(columnName, "__") {
+			columnName = strings.Split(columnName, "__")[0]
+		}
 	}
 	var caption string
 	switch description {

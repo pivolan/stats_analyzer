@@ -165,8 +165,69 @@ func splitMessage(text string, maxLength int) []string {
 
 	return messages
 }
+func getTableColumns(tableName models.ClickhouseTableName, db *gorm.DB) ([]string, error) {
+	// Query to get column information
+	var columns []struct {
+		ColumnName string `gorm:"column:COLUMN_NAME"`
+	}
 
+	err := db.Raw(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = ? 
+        ORDER BY ORDINAL_POSITION`,
+		tableName).Scan(&columns).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("error getting columns: %v", err)
+	}
+
+	// Process column names - remove first 5 characters
+	processedColumns := make([]string, 0, len(columns))
+	for _, col := range columns {
+		if len(col.ColumnName) > 5 {
+			processedColumns = append(processedColumns, col.ColumnName[5:])
+		} else {
+			processedColumns = append(processedColumns, col.ColumnName)
+		}
+	}
+
+	return processedColumns, nil
+}
 func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
+	tableName := currentTable[chatId]
+	if tableName == "" {
+		msg := tgbotapi.NewMessage(chatId, "No active table found for this chat")
+		bot.Send(msg)
+		return
+	}
+
+	// Connect to database
+	cfg := config.GetConfig()
+	db, err := gorm.Open(mysql.Open(cfg.DatabaseDSN), &gorm.Config{})
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatId, "Error connecting to database")
+		bot.Send(msg)
+		return
+	}
+
+	// Get columns
+	columns, err := getTableColumns(tableName, db)
+	if err != nil {
+		msg := tgbotapi.NewMessage(chatId, "Error retrieving column information: "+err.Error())
+		bot.Send(msg)
+		return
+	}
+
+	// Format column message
+	columnMsg := "📊 Columns in your table:\n\n"
+	for i, col := range columns {
+		columnMsg += fmt.Sprintf("%d. %s\n", i+1, col)
+	}
+
+	// Send column information
+	msg := tgbotapi.NewMessage(chatId, columnMsg)
+	bot.Send(msg)
 	formattedText := GenerateCommonInfoMsg(stat)
 
 	// Split long messages
@@ -191,7 +252,7 @@ func sendStats(chatId int64, stat map[string]CommonStat, bot *tgbotapi.BotAPI) {
 	}
 	msg2 := tgbotapi.NewDocumentUpload(chatId, data)
 	msg2.Caption = "Общая статистика: " + fileName
-	_, err := bot.Send(msg2)
+	_, err = bot.Send(msg2)
 	if err != nil {
 		return
 	}
@@ -345,7 +406,7 @@ func Select(stat map[string]CommonStat, chatID int64, bot *tgbotapi.BotAPI) {
 						x,
 						z,
 						"count",
-						fmt.Sprintf("Показывает количество строк по времени в таблице %v", k[11:]),
+						fmt.Sprintf("Показывает количество строк по времени в таблице"),
 						interval,
 					)
 					graph, err := plot.DrawPlotBar(objectGraph)

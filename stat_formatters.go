@@ -20,12 +20,12 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 	if allStat, ok := stats["all"]; ok {
 		result.WriteString(fmt.Sprintf("📊 Total Lines: %d\n\n", allStat.Count))
 	}
-
+	result.WriteString("Columns:\n")
 	// Numeric Columns
 	result.WriteString("📈 Numeric Columns:\n")
 	for name, stat := range stats {
 		if stat.IsNumeric {
-			columnName := strings.TrimPrefix(name, "0003_")
+			columnName := name[5:]
 			result.WriteString(fmt.Sprintf("• %s\n", columnName))
 			result.WriteString(fmt.Sprintf("  Avg: %.2f\n", stat.Avg))
 			result.WriteString(fmt.Sprintf("  Median: %.2f\n", stat.Median))
@@ -121,21 +121,10 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 					result.WriteString("📅 Date Columns:\n")
 					hasDates = true
 				}
-				fieldName := strings.TrimPrefix(name, "dates_0001_")
-				if strings.Contains(name, "day") {
-					result.WriteString(fmt.Sprintf("• %s (day); /%s\n",
-						strings.TrimSuffix(fieldName, "_day"), name))
-				} else if strings.Contains(name, "month") {
-					result.WriteString(fmt.Sprintf("• %s (month); /%s\n",
-						strings.TrimSuffix(fieldName, "_month"), name))
-				} else if strings.Contains(name, "year") {
-					result.WriteString(fmt.Sprintf("• %s (year); /%s\n",
-						strings.TrimSuffix(fieldName, "_year"), name))
-				} else if strings.Contains(name, "hour") {
-					result.WriteString(fmt.Sprintf("• %s (hour); /%s\n",
-						strings.TrimSuffix(fieldName, "_hour"), name))
-
-				}
+				fieldName := strings.Split(name[11:], "__")[0]
+				timeIntervalName := strings.Split(name, "__")[1]
+				result.WriteString(fmt.Sprintf("• %s (%s); /%s\n",
+					fieldName, timeIntervalName, name))
 			}
 		}
 	}
@@ -143,13 +132,6 @@ func GenerateCommonInfoMsg(stats map[string]CommonStat) string {
 	return result.String()
 }
 
-func isNumericColumn(name string) bool {
-	// Проверяем, начинается ли имя с цифр (0001_, 0002_ и т.д.)
-	if len(name) >= 4 && name[0:4] == "0003" {
-		return true
-	}
-	return false
-}
 func GenerateTable(stats map[string]CommonStat) string {
 	// Create a new table with a Key column and columns for each field in the CommonStat struct
 	t := table.NewWriter()
