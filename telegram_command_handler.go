@@ -36,7 +36,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 			api.Send(msg)
 			return
 		}
-		handleGraphColumn(api, update, columnName)
+		handleNumericColumn(api, update, columnName)
 
 	case strings.HasPrefix(fullCommand, detailsPrefix):
 		// Получаем имя колонки, отрезая префикс
@@ -47,7 +47,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 			return
 		}
 
-		handleColumnDetails(api, update, columnName)
+		handleStringColumn(api, update, columnName)
 	case strings.HasPrefix(fullCommand, datesPrefix):
 		// Получаем имя колонки, отрезая префикс
 		columnName := strings.TrimPrefix(fullCommand, datesPrefix)
@@ -56,7 +56,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 			api.Send(msg)
 			return
 		}
-		handleColumnDates(api, update, columnName)
+		handleDateColumn(api, update, columnName)
 	case fullCommand == "start":
 		handleStartCommand(api, update)
 	default:
@@ -65,7 +65,7 @@ func handleCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	}
 }
 
-func handleColumnDates(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
+func handleDateColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
 	tableName, exists := currentTable[update.Message.Chat.ID]
 	if !exists {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Сначала выберите таблицу")
@@ -208,7 +208,7 @@ func sum(values []float64) float64 {
 	}
 	return total
 }
-func handleColumnDetails(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
+func handleStringColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
 	tableName, exists := currentTable[update.Message.Chat.ID]
 	if !exists {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Сначала выберите таблицу")
@@ -509,7 +509,7 @@ func GenerateHistogram(db *gorm.DB, tableName models.ClickhouseTableName, column
 	graph, _ := plot.DrawDensityPlot(xValues, yValues)
 	return hist, nil, graph
 }
-func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
+func handleNumericColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName string) {
 	tableName, exists := currentTable[update.Message.Chat.ID]
 	if !exists {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Сначала выберите таблицу")
@@ -700,102 +700,6 @@ func handleGraphColumn(api *tgbotapi.BotAPI, update tgbotapi.Update, columnName 
 	// Отправляем график
 	sendGraphVisualization(pngData, "histogram", columnName[5:], "частотное распределения категориальных данных", update.Message.Chat.ID, api)
 	sendGraphVisualization(pngData2, "density", columnName[5:], "суммирование числовых данных по категориям", update.Message.Chat.ID, api)
-
-}
-
-func analyzeStringColumn(db *gorm.DB, tableName string, columnName string) (*models.StringColumnStats, error) {
-	stats := &models.StringColumnStats{}
-
-	// Основная статистика
-	basicStatsSQL := fmt.Sprintf(`
-        SELECT 
-            COUNT(*) as total_rows,
-            uniq(%[1]s) as unique_values,
-            COUNT(*) - COUNT(%[1]s) as null_count,
-            SUM(CASE WHEN %[1]s = '' THEN 1 ELSE 0 END) as empty_string_count,
-            SUM(CASE WHEN length(trim(%[1]s)) = 0 THEN 1 ELSE 0 END) as whitespace_count,
-            min(length(%[1]s)) as min_length,
-            max(length(%[1]s)) as max_length,
-            avg(length(%[1]s)) as avg_length
-        FROM %[2]s
-    `, columnName, tableName)
-
-	var basicStats models.BasicStats
-	if err := db.Raw(basicStatsSQL).Scan(&basicStats).Error; err != nil {
-		return nil, fmt.Errorf("error getting basic stats: %v", err)
-	}
-
-	stats.TotalRows = basicStats.TotalRows
-	stats.UniqueValues = basicStats.UniqueValues
-	stats.NullCount = basicStats.NullCount
-	stats.EmptyStringCount = basicStats.EmptyStringCount
-	stats.WhitespaceCount = basicStats.WhitespaceCount
-	stats.MinLength = basicStats.MinLength
-	stats.MaxLength = basicStats.MaxLength
-	stats.AvgLength = basicStats.AvgLength
-
-	// Популярные значения
-	popularSQL := fmt.Sprintf(`
-        WITH value_counts AS (
-            SELECT 
-                %s as value,
-                COUNT(*) as count,
-                COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () as percentage
-            FROM %s
-            WHERE %s IS NOT NULL
-            GROUP BY %s
-        )
-        SELECT value, count, percentage
-        FROM value_counts
-        ORDER BY count DESC
-        LIMIT 10
-    `, columnName, tableName, columnName, columnName)
-
-	if err := db.Raw(popularSQL).Scan(&stats.PopularValues).Error; err != nil {
-		return nil, fmt.Errorf("error getting popular values: %v", err)
-	}
-
-	// Непопулярные значения
-	unpopularSQL := fmt.Sprintf(`
-        WITH value_counts AS (
-            SELECT 
-                %s as value,
-                COUNT(*) as count,
-                COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () as percentage
-            FROM %s
-            WHERE %s IS NOT NULL
-            GROUP BY %s
-        )
-        SELECT value, count, percentage
-        FROM value_counts
-        ORDER BY count ASC
-        LIMIT 10
-    `, columnName, tableName, columnName, columnName)
-
-	if err := db.Raw(unpopularSQL).Scan(&stats.UnpopularValues).Error; err != nil {
-		return nil, fmt.Errorf("error getting unpopular values: %v", err)
-	}
-
-	// Распределение длин строк
-	lengthDistSQL := fmt.Sprintf(`
-        WITH lengths AS (
-            SELECT length(%s) as str_length
-            FROM %s
-            WHERE %s IS NOT NULL
-        )
-        SELECT 
-            str_length as length,
-            COUNT(*) as frequency
-        FROM lengths
-        GROUP BY str_length
-        ORDER BY str_length
-    `, columnName, tableName, columnName)
-
-	if err := db.Raw(lengthDistSQL).Scan(&stats.LengthDistribution).Error; err != nil {
-		return nil, fmt.Errorf("error getting length distribution: %v", err)
-	}
-
-	return stats, nil
 }
 
 func handleStartCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
@@ -810,106 +714,6 @@ func handleStartCommand(api *tgbotapi.BotAPI, update tgbotapi.Update) {
 	api.Send(msg)
 	return
 
-}
-
-func sumNumericByStringGroups(db *gorm.DB, tableName models.ClickhouseTableName) ([]byte, error) {
-	// Получаем информацию о структуре таблицы, исключая первую колонку (обычно id)
-	tableInfoSQL := fmt.Sprintf(`
-        SELECT 
-            name,
-            type,
-            position
-        FROM system.columns 
-        WHERE table = '%s'
-        AND position > 1  -- пропускаем первую колонку (обычно id)
-        AND (type LIKE '%%Int%%' OR type LIKE '%%Float%%')
-        ORDER BY position
-        LIMIT 1
-    `, tableName)
-
-	type ColumnInfo struct {
-		Name     string
-		Type     string
-		Position int
-	}
-
-	var numericColumn ColumnInfo
-	if err := db.Raw(tableInfoSQL).Scan(&numericColumn).Error; err != nil {
-		return nil, fmt.Errorf("error finding numeric column: %v", err)
-	}
-
-	if numericColumn.Name == "" {
-		return nil, fmt.Errorf("no numeric columns found")
-	}
-
-	log.Printf("Found numeric column: %s (%s) at position %d",
-		numericColumn.Name, numericColumn.Type, numericColumn.Position)
-
-	// Находим первое строковое поле для группировки (исключая поле с датой)
-	findGroupColumnSQL := fmt.Sprintf(`
-        SELECT 
-            name,
-            type,
-            position
-        FROM system.columns 
-        WHERE table = '%s'
-        AND type LIKE '%%String%%'
-        AND position > 1
-        AND name NOT LIKE '%%date%%'
-        ORDER BY position
-        LIMIT 1
-    `, tableName)
-
-	var groupColumn ColumnInfo
-	if err := db.Raw(findGroupColumnSQL).Scan(&groupColumn).Error; err != nil {
-		return nil, fmt.Errorf("error finding group column: %v", err)
-	}
-
-	if groupColumn.Name == "" {
-		return nil, fmt.Errorf("no string columns found for grouping")
-	}
-
-	log.Printf("Using group column: %s (%s)", groupColumn.Name, groupColumn.Type)
-
-	// Выполняем агрегацию
-	aggregateSQL := fmt.Sprintf(`
-        SELECT 
-            %s as category,
-            sum(%s) as total
-        FROM %s
-        WHERE %s IS NOT NULL
-        GROUP BY %s
-        ORDER BY total DESC
-    `, groupColumn.Name, numericColumn.Name, tableName, groupColumn.Name, groupColumn.Name)
-
-	type Result struct {
-		Category string
-		Total    int64
-	}
-
-	var results []Result
-	if err := db.Raw(aggregateSQL).Scan(&results).Error; err != nil {
-		return nil, fmt.Errorf("error aggregating data: %v", err)
-	}
-
-	log.Printf("Found %d aggregated results", len(results))
-
-	if len(results) == 0 {
-		return nil, fmt.Errorf("no data found after aggregation")
-	}
-
-	// Готовим данные для графика
-	categories := make([]string, len(results))
-	values := make([]float64, len(results))
-	for i, r := range results {
-		categories[i] = r.Category
-		values[i] = float64(r.Total)
-		log.Printf("Result %d: %s = %d", i, r.Category, r.Total)
-	}
-
-	// Генерируем график
-	data := plot.NewDataXStringsForGraph(categories, values, "Histogram String Value", "Frequency", "")
-	return plot.DrawPlotBar(data)
 }
 
 func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, columnName string, update tgbotapi.Update, api *tgbotapi.BotAPI, timeUnit string) {
@@ -984,7 +788,7 @@ func sumFirstColumnDate(db *gorm.DB, dateTruncExpr, tableName, baseField, column
 		yValues = append(yValues, float64(dc.SumValue))
 	}
 	// созадем структуру для реализации функции
-	gr := plot.NewDataDateForGraph(xValues, yValues, columnName, fmt.Sprintf("Суммарное значение столбца %s группировка по времени", numericColumn), timeUnit)
+	gr := plot.NewDataDateForGraph(xValues, yValues, columnName, fmt.Sprintf("Суммарное значение столбца %s группировка по времени", numericColumn[5:]), timeUnit)
 	graphData, err := plot.DrawPlotBar(gr)
 
 	if err != nil {

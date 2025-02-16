@@ -70,6 +70,9 @@ func sendGraphVisualization(graph []byte, visualType string, columnName string, 
 }
 
 func generateVizualDescription(description, columnName string, nameGraph string, timeUnit ...string) string {
+	if len(columnName) > 5 {
+		columnName = columnName[5:]
+	}
 	var caption string
 	switch description {
 	case "histogram":
