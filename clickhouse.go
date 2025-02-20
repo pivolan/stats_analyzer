@@ -298,7 +298,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 			case float64:
 				t = "Float64"
 			case string:
-				if v == "" {
+				if v == "" || v == "\\N" {
 					nullables[n] = " NULL "
 					continue
 				}
@@ -361,7 +361,11 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 	b := bytes.NewBufferString("")
 	csvWriter := csv.NewWriter(b)
 	i := 1
-	tx = db.Exec("SET max_query_size = 1048576")
+	tx = db.Exec("SET max_query_size = 5048576")
+	tx = tx.Exec("SET max_insert_block_size = 5000000")
+	const maxQuerySize = 1 * 1024 * 1024 // 1MB в байтах
+	const maxColumnLength = 4000         // максимальная длина значения колонки
+
 	for ; ; i++ {
 		values, err := r.Read()
 		if err != nil {
@@ -369,6 +373,14 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 		}
 		values = removeBOM(values)
 		for k, v := range values {
+			// Обрезаем значение до 4000 символов
+			if len(v) > maxColumnLength {
+				v = v[:maxColumnLength]
+			}
+			if v == "\\N" {
+				values[k] = ""
+			}
+
 			if types[k] == "String" || types[k] == "Date" || types[k] == "DateTime" {
 				values[k] = "'" + v + "'"
 			}
@@ -378,6 +390,11 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 			} else if types[k] == "Date" {
 				values[k] = "'" + t.Format("2006-01-02") + "'"
 			}
+
+			// После форматирования снова проверяем длину
+			if len(values[k]) > maxColumnLength {
+				values[k] = values[k][:maxColumnLength-1] + "'"
+			}
 		}
 
 		if !idExists {
@@ -386,7 +403,7 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 
 		csvWriter.Write(values)
 
-		if i%(10000/int(math.Max(1.0, float64(len(headers))/50))) == 0 {
+		if b.Len() > maxQuerySize || i%(10000/int(math.Max(1.0, float64(len(headers))/50))) == 0 {
 			csvWriter.Flush()
 			sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
 			b.Reset()
@@ -396,7 +413,6 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 			}
 		}
 	}
-
 	csvWriter.Flush()
 	if b.Len() > 0 {
 		sql := fmt.Sprintf("INSERT INTO "+tableName+" FORMAT CSV \n%s", b.String())
