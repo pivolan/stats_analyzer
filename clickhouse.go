@@ -256,7 +256,9 @@ func importDataIntoClickHouse(filePath string, db DBInterface) (models.Clickhous
 				break
 			}
 		}
-
+		if len(values) != len(types) {
+			continue
+		}
 		for n, value := range values {
 			// Remove UTF-8 BOM (Byte Order Mark) if present. BOM is a sequence of bytes (0xEF,0xBB,0xBF)
 			// that some text editors (especially on Windows) add at the beginning of UTF-8 files
